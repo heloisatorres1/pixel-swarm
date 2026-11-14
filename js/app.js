@@ -218,6 +218,8 @@
     const names = { music: 'Music', sounds: 'Sounds', haptics: 'Haptics', notifications: 'Notifications' };
     toast(`${names[key]} ${state.settings[key] ? 'on' : 'off'}`);
     if (key === 'notifications') PSNative.scheduleDailyReward(state.settings.notifications);
+    if (key === 'music') PSAudio.setMusic(state.settings.music);
+    if (key === 'sounds') PSAudio.setSfx(state.settings.sounds);
   }
   function openLink(key) {
     if (LINKS[key]) window.open(LINKS[key], '_blank', 'noopener');
@@ -243,6 +245,7 @@
     document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === 'screen-' + name));
     document.querySelectorAll('#bottom-nav .nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
     currentScreen = name;
+    PSAudio.music(name === 'game' ? 'game' : 'menu');
     $('app').classList.toggle('no-nav', name === 'game' || name === 'events');
     $('app').classList.toggle('no-ads', !!state.noAds);
     if (name !== 'game') hideTutorial();
@@ -322,6 +325,7 @@
   }
 
   function grant({ gems = 0, coins = 0, noAds = false }) {
+    if (gems || coins) PSAudio.sfx('coin');
     state.gems += gems; state.coins += coins;
     state.stats.coinsEarned += coins;
     if (noAds) state.noAds = true;
@@ -1738,7 +1742,7 @@
     if (!b) return;
     if (idx > 0 && g.mode !== 'pick') return;
     const pick = g.mode === 'pick';
-    const thaw = (c) => crackIce(g, c).forEach((t) => { t.thawed = true; }); // a take cracks the visible ice in the other columns
+    const thaw = (c) => crackIce(g, c).forEach((t) => { t.thawed = true; PSAudio.sfx('ice'); }); // a take cracks the visible ice in the other columns
     if (b.kind === 'pipe') return toast('Pipes push their blocks up when the space above them is free');
     if (b.kind === 'lock' && pick) return toast('Locks open only with their key 🔑');
     if (pick) { if (b.link) unlink(b); } // Free Pick takes any block alone (frozen too)
@@ -1746,7 +1750,7 @@
       const why = blockedReason(col);
       if (why) {
         const other = g.cols.some((c, i) => i !== col && c[0] && !blockedReason(i));
-        if (other) return toast(why);
+        if (other) { PSAudio.sfx('error'); return toast(why); }
         // nothing else can be played: lift the restriction so the level can never get stuck
         if (b.kind === 'lock') { g.unlocked.add(b.id); settle(g); renderQueue(); return toast('🔓 The lock opened!'); }
         b.frozen = 0; if (b.link) unlink(b);
@@ -1757,6 +1761,7 @@
       if (pick) { spendBooster('pick'); g.mode = null; setHint(null); }
       hammerFly(document.querySelector(`#g-queue [data-col="${col}"][data-i="${idx}"]`));
       const broke = hitWood(g);
+      PSAudio.sfx(broke ? 'crack' : 'hammer');
       settle(g); haptic(); drawBoard(); renderQueue(); renderBoosters();
       toast(broke ? '🔨 Crack! The wood broke' : `🔨 Bonk! ${g.wood ? g.wood.left : 0} more hammer${g.wood && g.wood.left === 1 ? '' : 's'} to break the wood`);
       if (tutorialTap) nextCoachStep();
@@ -1765,7 +1770,7 @@
     // linked blocks go to the slots together (the partner comes along from wherever it is in the line)
     const at = b.link ? findPartner(g, b) : null;
     const need = at ? 2 : 1, freeSlots = g.slots.map((s, i) => (s ? -1 : i)).filter((i) => i >= 0);
-    if (freeSlots.length < need) return toast(need > 1 ? 'Linked blocks need 2 free slots!' : 'No free slot — wait for the bees!');
+    if (freeSlots.length < need) { PSAudio.sfx('error'); return toast(need > 1 ? 'Linked blocks need 2 free slots!' : 'No free slot — wait for the bees!'); }
     const group = [[col, idx]];
     if (at) group.push(at);
     group.map(([c, i]) => [c, i, g.cols[c][i]]).forEach(([c, i, blk], n) => {
@@ -1776,7 +1781,7 @@
     });
     settle(g);
     if (pick) { spendBooster('pick'); g.mode = null; setHint(null); }
-    haptic();
+    haptic(); PSAudio.sfx('pick');
     renderSlots(); renderQueue(); renderBoosters();
     freeSlots.slice(0, need).forEach((i) => { const el = document.querySelector(`#screen-game [data-slot="${i}"]`); if (el) el.classList.add('pop'); });
     if (tutorialTap) nextCoachStep();
@@ -1890,6 +1895,7 @@
       if (!back) {
         // reached the pixel: eat it, pick up a little block of its color and fly home
         (bee.pend || [bee.t.key]).forEach((k) => g.pending.delete(k));
+        PSAudio.sfx('eat');
         puzzleEvents(bee.ev || []);
         bee.block.inFlight -= 1; boardChanged = true; slotsChanged = true;
         bee.phase = 'back'; bee.p = 0; bee.el.carry(true);
@@ -1904,7 +1910,7 @@
     // finished blocks leave their slot (linked blocks only together, once both are done)
     const done = (b) => b.amount <= 0 && b.inFlight <= 0;
     g.slots.forEach((b, i) => {
-      if (b && done(b) && (!b.link || g.slots.every((o) => !o || o.link !== b.link || done(o)))) { g.slots[i] = null; slotsChanged = true; }
+      if (b && done(b) && (!b.link || g.slots.every((o) => !o || o.link !== b.link || done(o)))) { g.slots[i] = null; slotsChanged = true; PSAudio.sfx('slot'); }
     });
     if (slotsChanged) renderSlots();
     PSRender.frame(); // draw this step (also when the browser throttles animation frames)
@@ -1915,6 +1921,8 @@
   // what the player sees when a bee (or the Wind) triggers a puzzle
   function puzzleEvents(ev) {
     if (!ev.length) return;
+    if (ev.includes('key')) PSAudio.sfx('key');
+    if (ev.includes('cookie')) PSAudio.sfx('crack');
     if (ev.includes('key')) (ev.keyIds || []).forEach((id) => { game.opening.add(id); animateKey(id); });
     if (ev.includes('cookie')) toast('🍪 Crunch! The cookie broke');
     if (ev.some((e) => e !== 'big') && state.settings.haptics) PSNative.vibrate('medium');
@@ -1954,6 +1962,7 @@
     };
     frame();
     const landed = () => {
+      PSAudio.sfx('unlock');
       key.remove();
       const el = document.querySelector(`#g-queue .block.lock[data-lock="${id}"]`); // (the line may have re-rendered)
       if (!el || game !== g) return finish();
@@ -1966,6 +1975,7 @@
   }
   function endLevel(win) {
     game.over = true;
+    PSAudio.sfx(win ? 'win' : 'lose');
     if (state.settings.haptics) PSNative.vibrate('heavy');
     if (win) { $('g-board').parentElement.classList.add('flash'); setTimeout(() => { $('g-board').parentElement.classList.remove('flash'); showWin(3 - Math.min(2, game.extras)); }, 600); }
     else openPopup('popup-fail');
@@ -2027,7 +2037,7 @@
       removed.push([xx, yy, ch]); g.reserved.delete(k);
       events.push(...eatPixel(g, k));
     }));
-    windEffect(removed);
+    windEffect(removed); PSAudio.sfx('wind');
     toast(`Whoosh! ${removed.length} pixels blown away`);
     // blocks of that color leave the line; their linked partners become normal blocks
     g.cols.flat().filter((b) => b.color === color && b.link).forEach(unlink);
@@ -2047,6 +2057,7 @@
     $('win-pk').textContent = '+' + EVENT_PUMPKINS_PER_WIN;
     g.reward = WIN_COINS[g.diff];
     $('win-stars').innerHTML = [0, 1, 2].map((i) => `<img class="${i < stars ? '' : 'off'}" src="assets/sprites/star.png" alt="">`).join('');
+    for (let i = 0; i < stars; i++) setTimeout(() => PSAudio.sfx('star'), 700 + i * 260); // a chime per star
     $('win-pic').src = D.gridURL(g.grid, Math.max(4, Math.floor(168 / g.grid.length)));
     $('win-name').textContent = `${themeById(g.theme).name} • ${D.PICTURES[g.picId].name}`;
     $('win-coins').textContent = '+' + g.reward;
@@ -2606,6 +2617,8 @@
     // dev: index.html#wardrobe_ladybug / #wardrobe_firefly — the wardrobe on a bug the player doesn't own yet
     wardrobe_ladybug: () => { showScreen('skins'); viewSkin('ladybug'); viewLook('pirate'); },
     wardrobe_firefly: () => { showScreen('skins'); viewSkin('firefly'); },
+    // dev: index.html#audiotest plays a level with the bot and reports what the audio engine played
+    audiotest: () => { PSAudio.unlock(); testPuzzle('wood', true); setTimeout(() => { document.body.dataset.audio = JSON.stringify(PSAudio.debug()); }, 60000); },
     // dev: index.html#layout_probe writes the game screen's layout boxes into <body data-rects> (for layout checks)
     layout_probe: () => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'medium', 0);
       setTimeout(() => { const r = (id) => { const b = $(id).getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; };
@@ -2685,6 +2698,7 @@
     // tap on the dark backdrop closes the pop-up
     if (openPopupEl && e.target === openPopupEl) return closePopup();
     const el = e.target.closest('[data-close], [data-toggle], [data-link], [data-action]');
+    if (el && el.dataset.action !== 'tap-block') PSAudio.sfx('tap');
     if (!el) return;
     haptic();
     if (el.hasAttribute('data-close')) return closePopup();
@@ -2787,6 +2801,8 @@
     ['bee_fly', 'ladybug_fly', 'beetle', 'butterfly', 'ant', 'firefly', 'booster_wind'].map((n) => `assets/sprites/${n}.png`)
       .concat(['block_wood', 'cookie_intact', 'cookie_damaged', 'key', 'hidden_pixel'].map((n) => `assets/sprites/puzzles/${n}.png`)))
     .catch((e) => console.warn('PixiJS unavailable, using 2D canvas', e));
+  // music & sounds follow the Settings switches (they start on the player's first tap)
+  PSAudio.setMusic(state.settings.music); PSAudio.setSfx(state.settings.sounds);
   // phone app: (re)schedule the "daily reward is ready" notification
   PSNative.scheduleDailyReward(state.settings.notifications);
   // Dev shortcut: index.html#settings opens that screen directly (after the renderer is ready)

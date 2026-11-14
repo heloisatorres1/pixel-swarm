@@ -11,3 +11,7 @@
 | Old style comparison images (`assets/img/*.png`, used only by `art-options.html`) | [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft | MIT |
 
 To re-slice a new sheet: `tools/slice-sheet.ps1 -Sheet downloads\sheet2.png -OutDir assets\sprites`
+
+## Music & sound effects
+
+All music and sound effects are synthesized live in the browser with the Web Audio API (`js/audio.js`). They are original to this project: no audio files, no third-party licences.
