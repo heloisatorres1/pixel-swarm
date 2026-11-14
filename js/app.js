@@ -958,11 +958,17 @@
     return set;
   }
 
-  // ---- PUZZLES on the picture (shared rules: game, level generator and checkers all use these) ----
-  // cover: Map(cell -> 'wood' | 'cookie'). Covered cells block the bees and can't be eaten.
-  //   wood breaks when a bee collects the hammer; the cookie breaks after `cookie.left` more pixels are eaten.
-  // big: Map(cell -> group). A big pixel (2x2) needs 4 bites and stays solid until the last one.
-  // keys: Map(cell -> lock id). Eating that pixel collects the key and opens the locked block.
+  // ---- PUZZLES (shared rules: game, level generator and checkers all use these) ----
+  // Based on the design doc references (Colony-Flow-style games):
+  //  PICTURE  cover: Map(cell -> 'wood' | 'cookie') — covered cells block the bugs and can't be eaten.
+  //             wood: a plank with a number = hammers needed; the HAMMERS are items in the line.
+  //             cookie: a number = pixels to clear anywhere to break it.
+  //           big: Map(cell -> group) — one big pixel over 2x2 / 3x3 cells; its number = bites needed (more bugs).
+  //           keys: Map(cell -> lock id) — eating that pixel collects the key and opens its lock in the line.
+  //           hidden: purple "?" pixels; they show their color once the path to them is cleared.
+  //  LINE     { kind: 'lock' } padlock tile blocking its column; { kind: 'hammer' } tap to hit the wood;
+  //           { kind: 'pipe', items } holds blocks and pushes the next one up when the space above it is free.
+  //           blocks can be mystery, frozen, or linked (picked together, leave the slots together).
   function openFn(g) {
     const W = g.cells[0].length;
     return (x, y) => {
@@ -976,28 +982,23 @@
       if (g.cover && g.cover.has(k)) return -1;
       const grp = g.big && g.big.get(k);
       if (!grp) return k;
-      const c = grp.cells.find((q) => !grp.bitten.has(q) && !(g.reserved && g.reserved.has(q)));
-      return c === undefined ? -1 : c;
+      return grp.left > 0 && !(g.reserved && g.reserved.has(grp.cells[0])) ? grp.cells[0] : -1;
     };
   }
-  // a bee (or a checker) eats pixel k. Returns the puzzle events it caused: 'big', 'hammer', 'key', 'cookie'
+  // a bug (or a checker) eats pixel k. Returns the puzzle events it caused: 'big', 'key', 'cookie'
   function eatPixel(g, k) {
     const W = g.cells[0].length, x = k % W, y = (k / W) | 0, ev = [];
     const grp = g.big && g.big.get(k);
     if (grp) {
-      if (grp.bitten.has(k)) return ev;
-      grp.bitten.add(k); g.remaining -= 1;
-      if (grp.bitten.size === grp.cells.length) {
+      if (grp.left <= 0) return ev;
+      grp.left -= 1; g.remaining -= 1;
+      if (grp.left === 0) {
         grp.cells.forEach((q) => { g.cells[(q / W) | 0][q % W] = null; g.big.delete(q); });
         ev.push('big'); ev.cells = grp.cells;
       }
     } else {
       if (!g.cells[y][x]) return ev;
       g.cells[y][x] = null; g.remaining -= 1;
-    }
-    if (g.hammer === k) {
-      g.hammer = -1; ev.push('hammer');
-      for (const [q, t] of g.cover) if (t === 'wood') g.cover.delete(q);
     }
     if (g.keys && g.keys.has(k)) { g.unlocked.add(g.keys.get(k)); g.keys.delete(k); ev.push('key'); }
     if (g.cookie && g.cookie.left > 0 && --g.cookie.left === 0) {
@@ -1006,14 +1007,43 @@
     }
     return ev;
   }
+  // a hammer from the line hits the wood plank. true = the wood broke
+  function hitWood(g) {
+    if (!g.wood || g.wood.left <= 0) return false;
+    if (--g.wood.left > 0) return false;
+    for (const [q, t] of g.cover) if (t === 'wood') g.cover.delete(q);
+    return true;
+  }
+  // tidy the line: open locks whose key was found, and pipes at the front push their next block up
+  function settle(g) {
+    g.cols.forEach((col, c) => {
+      g.cols[c] = col = col.filter((it) => !(it.kind === 'lock' && g.unlocked.has(it.id)));
+      while (col[0] && col[0].kind === 'pipe') {
+        const p = col[0];
+        if (!p.items.length) { col.shift(); continue; }
+        col.unshift(p.items.shift());
+        if (!p.items.length) col.splice(1, 1);
+        break;
+      }
+    });
+  }
+  const isBlock = (it) => !!it && !it.kind;
+  // where the linked partner of block b is in the line: [column, index] (pipes hide their blocks)
+  function findPartner(g, b) {
+    for (let c = 0; c < g.cols.length; c++) {
+      const i = g.cols[c].findIndex((o) => o !== b && isBlock(o) && o.link === b.link);
+      if (i >= 0) return [c, i];
+    }
+    return null;
+  }
   // fresh puzzle state for a level object from a placement plan (the generator's simulation uses its own copy)
   function applyBoard(o, plan) {
     o.cover = new Map(); o.big = new Map(); o.keys = new Map(plan.keys || []); o.unlocked = new Set();
-    (plan.wood || []).forEach((k) => o.cover.set(k, 'wood'));
+    (plan.wood ? plan.wood.cells : []).forEach((k) => o.cover.set(k, 'wood'));
+    o.wood = plan.wood ? { left: plan.wood.hits, hits: plan.wood.hits, cells: plan.wood.cells } : null;
     (plan.cookie ? plan.cookie.cells : []).forEach((k) => o.cover.set(k, 'cookie'));
-    o.cookie = plan.cookie ? { left: plan.cookie.n, cells: plan.cookie.cells } : null;
-    o.hammer = plan.hammer === undefined ? -1 : plan.hammer;
-    (plan.big || []).forEach((cells) => { const grp = { cells, bitten: new Set() }; cells.forEach((k) => o.big.set(k, grp)); });
+    o.cookie = plan.cookie ? { left: plan.cookie.n, n: plan.cookie.n, cells: plan.cookie.cells } : null;
+    (plan.big || []).forEach(({ cells, need }) => { const grp = { cells, left: need, need }; cells.forEach((k) => o.big.set(k, grp)); });
     o.hidden = new Set(plan.hidden || []);
     return o;
   }
@@ -1059,17 +1089,16 @@
       out.forEach((k) => used.add(k));
       return out;
     };
-    if (puzzles.has('wood')) { // wood crates in the middle; the hammer sits on a bottom pixel (reachable at once)
-      const w = Math.max(2, Math.round(W * 0.28)), h = Math.max(2, Math.round(H * 0.12));
-      plan.wood = rect(w, h, Math.round(H * 0.4 + prand() * H * 0.12));
-      const bottom = [...Array(W).keys()].map((x) => (H - 1) * W + x).filter((k) => cells[H - 1][k % W] && !used.has(k));
-      plan.hammer = pick(bottom); used.add(plan.hammer);
+    if (puzzles.has('wood')) { // a wood plank across the middle of the picture; 2–3 hammers in the line break it
+      const w = Math.max(3, Math.round(W * 0.5)), h = Math.max(2, Math.round(H * 0.14));
+      plan.wood = { cells: rect(w, h, Math.round(H * 0.3 + prand() * H * 0.15)), hits: 2 + Math.floor(prand() * 2) };
     }
-    if (puzzles.has('cookie')) { // a round cookie in the upper half; breaks after ~25% of the picture is eaten
-      const d = Math.max(3, Math.round(W * 0.22));
-      plan.cookie = { cells: rect(d, d, Math.round(H * 0.1 + prand() * H * 0.12)), n: Math.max(8, Math.round(total * 0.25)) };
+    if (puzzles.has('cookie')) { // a big cookie in the upper half; breaks after ~25% of the picture is eaten
+      const d = Math.max(4, Math.round(W * 0.3));
+      plan.cookie = { cells: rect(d, d, Math.round(H * 0.08 + prand() * H * 0.1)), n: Math.max(8, Math.round(total * 0.25)) };
     }
-    if (puzzles.has('big')) { // squares of one color: 2x2 on small pictures, 3x3 on big ones (so they're easy to see)
+    let extra = 0; // big pixels need more bites than they have cells
+    if (puzzles.has('big')) { // squares of one color: 2x2 on small pictures, 3x3 on big ones; number = bugs needed
       const S = W >= 24 ? 3 : 2, cand = [];
       for (let y = 0; y <= H - S; y++) for (let x = 0; x <= W - S; x++) {
         const c = cells[y][x], sq = [];
@@ -1078,24 +1107,39 @@
       }
       for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(prand() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]]; }
       plan.big = [];
-      const want = W >= 30 ? 6 : W >= 20 ? 5 : 3;
-      for (const q of cand) { if (plan.big.length >= want) break; if (q.some((k) => used.has(k))) continue; q.forEach((k) => used.add(k)); plan.big.push(q); }
+      const want = W >= 30 ? 5 : W >= 20 ? 4 : 3;
+      for (const q of cand) {
+        if (plan.big.length >= want) break;
+        if (q.some((k) => used.has(k))) continue;
+        q.forEach((k) => used.add(k));
+        const need = S === 2 ? 10 : 15; // like the references: a 2x2 big pixel needs 10 bugs
+        plan.big.push({ cells: q, need }); extra += need - q.length;
+      }
     }
     if (puzzles.has('hidden')) { // ~40% of the pixels above the bottom quarter start hidden (visual only)
       plan.hidden = [];
-      for (let y = 0; y < Math.floor(H * 0.75); y++) for (let x = 0; x < W; x++) if (cells[y][x] && prand() < 0.4) plan.hidden.push(y * W + x);
+      for (let y = 0; y < Math.floor(H * 0.75); y++) for (let x = 0; x < W; x++) if (cells[y][x] && !used.has(y * W + x) && prand() < 0.4) plan.hidden.push(y * W + x);
     }
+    const total2 = total + extra;
 
     // ---- 2. build the blocks from a guaranteed solution ----
-    // Simulate the bees with the same rules as the game (bottom pixels first, centre first, puzzles included).
+    // Simulate the bugs with the same rules as the game (bottom pixels first, centre first, puzzles included).
     // Each step: pick a color that has an exposed pixel, eat up to blockMin..blockMax of it -> that is one block.
     // Dealing these blocks across the columns in order means a careful player can always finish the level.
-    const s = applyBoard({ cells: cells.map((r) => r.slice()), reserved: new Set(), remaining: total }, plan);
+    // Hammers are part of that order too: the plank breaks in the simulation when the last hammer is used.
+    const s = applyBoard({ cells: cells.map((r) => r.slice()), reserved: new Set(), remaining: total2 }, plan);
     const sim = s.cells, simOpen = openFn(s), simTake = takeFn(s);
-    const simTarget = (color) => pickTarget(sim, simOpen, color, simTake); // same rule as the bees in the game
-    const blocks = [], eatenBy = new Map(); // pixel -> index of the block that ate it in the solution
+    const simTarget = (color) => pickTarget(sim, simOpen, color, simTake); // same rule as the bugs in the game
+    const blocks = [], eatenBy = new Map(); // pixel -> index (in the order) of the block that ate it
+    // hammers: spread over the first ~4–12 places of the order
+    const hammerAt = [];
+    if (plan.wood) for (let h = 0; h < plan.wood.hits; h++) hammerAt.push(3 + h * 3 + Math.floor(prand() * 3));
     while (s.remaining > 0) {
-      const options = [...reachableColors(sim, simOpen, simTake)];
+      let options = [...reachableColors(sim, simOpen, simTake)];
+      while (hammerAt.length && (blocks.length >= hammerAt[0] || !options.length)) {
+        hammerAt.shift(); blocks.push({ kind: 'hammer' }); hitWood(s);
+        options = [...reachableColors(sim, simOpen, simTake)];
+      }
       if (!options.length) return null; // the puzzles closed the picture off: caller tries without them
       const target = Math.round(cfg.blockMin + rand() * (cfg.blockMax - cfg.blockMin));
       // prefer colors that can make a full-size block right now (avoids tiny 1–2 pixel blocks)
@@ -1116,54 +1160,62 @@
       const eaten = [];
       while (n < target && (t = simTarget(color))) { const k = t[1] * W + t[0]; eatPixel(s, k); eaten.push(k); n += 1; }
       const prev = blocks[blocks.length - 1];
-      if (prev && prev.color === color && prev.amount + n <= cfg.blockMax) prev.amount += n; // avoid tiny repeats
+      if (isBlock(prev) && prev.color === color && prev.amount + n <= cfg.blockMax) prev.amount += n; // avoid tiny repeats
       // the first 3 blocks start at the front of the columns: never frozen there (it would break the solution order)
       else blocks.push({ color, amount: n, mystery: rand() < cfg.mystery, frozen: blocks.length >= 3 && rand() < cfg.frozen });
       eaten.forEach((k) => eatenBy.set(k, blocks.length - 1));
     }
+    while (hammerAt.length) { hammerAt.shift(); blocks.push({ kind: 'hammer' }); } // (only if the picture finished first)
 
-    // ---- 3. queue puzzles ----
+    // ---- 3. line puzzles ----
     let id = 0;
-    const free = (b) => b && !b.frozen && !b.link && !b.lock;
+    const free = (b) => isBlock(b) && !b.frozen && !b.link && !b.locked;
     if (puzzles.has('linked') || puzzles.has('mlinked')) {
-      // two neighbours in the solution order sit side by side (same row): they must be played together
-      const cand = blocks.map((b, i) => i).filter((i) => i % 3 !== 2 && free(blocks[i]) && free(blocks[i + 1]));
-      const n = Math.min(cand.length, W >= 30 ? 3 : 2);
+      // two blocks next to each other in the solution order are chained (side by side, or diagonal across rows)
+      const n = W >= 30 ? 3 : 2;
       for (let k = 0; k < n; k++) {
-        const ok = cand.filter((i) => free(blocks[i]) && free(blocks[i + 1]));
+        const ok = blocks.map((b, i) => i).filter((i) => free(blocks[i]) && free(blocks[i + 1]));
         if (!ok.length) break;
         const i = pick(ok); id += 1;
         blocks[i].link = id; blocks[i + 1].link = id;
         if (puzzles.has('mlinked') && k === 0) blocks[i + (prand() < 0.5 ? 0 : 1)].mystery = 'deep'; // hidden until it's in a slot
       }
     }
+    const locks = []; // [index in the order, lock id]: a padlock tile in front of that block
     if (puzzles.has('key')) {
-      // a locked block opens when the bees collect its key: the key sits on a pixel eaten 2–6 blocks earlier
+      // the key sits on a pixel the solution eats 2–6 blocks before the lock reaches the front
       const cand = blocks.map((b, i) => i).filter((i) => i >= 4 && free(blocks[i]));
       for (let k = 0; k < (W >= 30 ? 2 : 1) && cand.length; k++) {
         const j = cand.splice(Math.floor(prand() * cand.length), 1)[0];
         const pix = [...eatenBy].filter(([p, bi]) => bi >= j - 6 && bi <= j - 2 && !used.has(p)).map(([p]) => p);
         if (!pix.length) continue;
         const p = pick(pix); used.add(p); id += 1;
-        blocks[j].lock = id; (plan.keys = plan.keys || []).push([p, id]);
+        blocks[j].locked = true; locks.push([j, id]); (plan.keys = plan.keys || []).push([p, id]);
       }
     }
     const cols = [[], [], []];
-    blocks.forEach((b, i) => cols[i % 3].push(b));
+    blocks.forEach((b, i) => {
+      const lk = locks.find(([j]) => j === i);
+      if (lk) cols[i % 3].push({ kind: 'lock', id: lk[1] });
+      cols[i % 3].push(b);
+    });
+    blocks.forEach((b) => { delete b.locked; });
     if (puzzles.has('pipe')) {
-      // a pipe holds 2–3 blocks of one column: only the next one shows, the rest move up as they're used
-      const tries = [0, 1, 2].map((c) => [c, Math.floor(prand() * 3)]);
-      for (const [c, r] of tries.slice(0, W >= 30 ? 2 : 1)) {
-        const len = 2 + Math.floor(prand() * 2), seg = cols[c].slice(r, r + len);
-        if (seg.length < 2 || seg.some((b) => b.link || b.lock)) continue;
-        id += 1; seg.forEach((b) => { b.pipe = id; });
+      // a pipe tile holds 2–4 blocks of its column and pushes them up one by one
+      const order = [0, 1, 2].sort(() => prand() - 0.5);
+      for (const c of order.slice(0, W >= 30 ? 2 : 1)) {
+        const r = 1 + Math.floor(prand() * 2), len = 2 + Math.floor(prand() * 3), seg = cols[c].slice(r, r + len);
+        if (seg.length < 2 || seg.some((b) => !isBlock(b) || b.link)) continue;
+        cols[c].splice(r, len, { kind: 'pipe', items: seg });
       }
     }
     // slotPlace says where each slot is drawn: 'main' row, or 'ad0' / 'ad1' (an AD slot opened by the player)
-    return applyBoard({ theme, diff, index, picId, grid, cfg, cells, cols, puzzles,
+    const lvl = applyBoard({ theme, diff, index, picId, grid, cfg, cells, cols, puzzles,
       slots: Array(cfg.slots).fill(null), slotPlace: Array(cfg.slots).fill('main'),
       speed: 1, bees: [], reserved: new Set(), pending: new Map(), // every level starts at normal speed
-      remaining: total, extras: 0, mode: null, over: false, last: 0, launchTimer: 0 }, plan);
+      remaining: total2, extras: 0, mode: null, over: false, last: 0, launchTimer: 0 }, plan);
+    settle(lvl);
+    return lvl;
   }
 
   // ---- tuning (milliseconds at 1x speed) ----
@@ -1186,8 +1238,9 @@
       if (all.some((b) => b.mystery === true)) has.add('mystery');
       if (all.some((b) => b.frozen)) has.add('frozen');
       if (!all.some((b) => b.link)) { has.delete('linked'); has.delete('mlinked'); }
-      if (!all.some((b) => b.lock)) has.delete('key');
-      if (!all.some((b) => b.pipe)) has.delete('pipe');
+      if (!all.some((b) => b.kind === 'lock')) has.delete('key');
+      if (!all.some((b) => b.kind === 'pipe')) has.delete('pipe');
+      if (!all.some((b) => b.kind === 'hammer')) has.delete('wood');
       const fresh = PUZZLE_ORDER.find((p) => has.has(p) && !state.seen[p]);
       if (fresh) { state.seen[fresh] = true; saveState(); showUnlock('feature', FEATURES[fresh]); }
     }
@@ -1226,23 +1279,24 @@
     const g = game, W = g.cells[0].length;
     if (g.hidden.size) for (const k of reachMap(g.cells, openFn(g)).keys()) g.hidden.delete(k);
     const items = [], at = (k) => [k % W, (k / W) | 0];
-    for (const [k, t] of g.cover) if (t === 'wood') { const [x, y] = at(k); items.push({ kind: 'crate', x, y }); }
+    const box = (cells) => {
+      const xs = cells.map((k) => k % W), ys = cells.map((k) => (k / W) | 0), x = Math.min(...xs), y = Math.min(...ys);
+      return { x, y, w: Math.max(...xs) - x + 1, h: Math.max(...ys) - y + 1 };
+    };
+    if (g.wood && g.wood.left > 0) items.push({ kind: 'plank', tex: 'block_wood', ...box(g.wood.cells), text: String(g.wood.left) });
     if (g.cookie && g.cookie.left > 0) {
-      const xs = g.cookie.cells.map((k) => k % W), ys = g.cookie.cells.map((k) => (k / W) | 0);
-      const x = Math.min(...xs), y = Math.min(...ys);
-      items.push({ kind: 'cookie', x, y, w: Math.max(...xs) - x + 1, h: Math.max(...ys) - y + 1, text: String(g.cookie.left) });
+      items.push({ kind: 'plank', tex: g.cookie.left <= g.cookie.n / 2 ? 'cookie_damaged' : 'cookie_intact', ...box(g.cookie.cells), text: String(g.cookie.left) });
     }
     new Set(g.big.values()).forEach((grp) => {
       const [x, y] = at(grp.cells[0]), S = Math.round(Math.sqrt(grp.cells.length));
-      items.push({ kind: 'big', x, y, w: S, h: S, color: D.PALETTE[g.cells[y][x]], text: String(grp.cells.length - grp.bitten.size) });
+      items.push({ kind: 'big', x, y, w: S, h: S, color: D.PALETTE[g.cells[y][x]], text: String(grp.left) });
     });
-    if (g.hammer >= 0) { const [x, y] = at(g.hammer); items.push({ kind: 'icon', x, y, text: '🔨' }); }
-    for (const k of g.keys.keys()) { const [x, y] = at(k); items.push({ kind: 'icon', x, y, text: '🔑' }); }
+    for (const k of g.keys.keys()) { const [x, y] = at(k); items.push({ kind: 'icon', tex: 'key', x, y }); }
     return {
       color: (k, ch) => ch || g.pending.get(k) || null, // pixels a bee is flying to stay visible until it takes them
       hide: (k) => g.cover.has(k) || g.big.has(k),
       tint: (k) => (g.hidden.has(k) ? HIDDEN_COLOR : null),
-      hiddenMark: g.cell / (window.devicePixelRatio || 1) >= 11, // "?" on hidden pixels when they're big enough
+      hidden: (k) => g.hidden.has(k), // drawn with the purple "?" hidden-pixel sprite
       items,
     };
   }
@@ -1261,15 +1315,16 @@
       ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fillRect(x * cell, y * cell, cell - gap, shine);
     }));
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    g.cells.forEach((row, y) => row.forEach((c0, x) => { // hidden pixels: purple "?" tiles
+      const k = y * W + x;
+      if (c0 && look.hidden(k) && !look.hide(k)) { ctx.fillStyle = '#7b68a6'; ctx.fillRect(x * cell, y * cell, cell - gap, cell - gap); }
+    }));
     look.items.forEach((it) => {
       const w = (it.w || 1) * cell - gap, h = (it.h || 1) * cell - gap, x = it.x * cell, y = it.y * cell;
-      if (it.kind === 'crate') { ctx.fillStyle = '#b97a3e'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#6b3a14'; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); }
-      if (it.kind === 'cookie') { ctx.fillStyle = '#d9a45a'; ctx.fillRect(x, y, w, h); }
+      if (it.kind === 'plank') { ctx.fillStyle = it.tex === 'block_wood' ? '#b97a3e' : '#e8b866'; ctx.fillRect(x, y, w, h); }
       if (it.kind === 'big') { ctx.fillStyle = it.color; ctx.fillRect(x, y, w, h); }
-      if (it.kind !== 'crate') {
-        ctx.font = `${Math.max(12, cell * (it.kind === 'icon' ? 1.6 : 1.1))}px "Lilita One", sans-serif`;
-        ctx.fillStyle = '#fff'; ctx.fillText(it.text, x + w / 2, y + h / 2);
-      }
+      ctx.font = `${Math.max(12, cell * (it.kind === 'icon' ? 1.6 : 1.1))}px "Lilita One", sans-serif`;
+      ctx.fillStyle = '#fff'; ctx.fillText(it.kind === 'icon' ? '🔑' : it.text, x + w / 2, y + h / 2);
     });
   }
   function renderSlots() {
@@ -1282,6 +1337,7 @@
         : `<button class="ad-slot" data-action="ad-slot" data-k="${k}" aria-label="Watch an ad to unlock a slot">
             <i class="spark l"></i><i class="spark r"></i>${img('icon_video_ad')}<b>AD</b></button>`;
     }).join('');
+    drawLinkRods($('g-slots'));
     refreshHints();
   }
   // queue: first 2 blocks of each column; the front one is tappable (Free Pick makes the second one tappable too)
@@ -1290,24 +1346,28 @@
     const pick = game.mode === 'pick';
     $('g-queue').classList.toggle('picking', pick);
     // normal view: 2 blocks per column + the top of the 3rd one (a preview of what's coming)
-    // a pipe shows only its next block (+ how many wait inside); Free Pick opens everything up
-    const view = (col) => {
-      const out = [];
-      col.forEach((b, i) => {
-        const prev = out[out.length - 1];
-        if (!pick && b.pipe && prev && prev.b.pipe === b.pipe) { prev.more += 1; return; }
-        out.push({ b, i, more: 0 });
-      });
-      return pick ? out : out.slice(0, 3);
-    };
-    // which side the chain of a linked block points to
-    const side = (b, c) => [c - 1, c + 1].find((k) => game.cols[k] && game.cols[k].some((o) => o.link === b.link));
-    $('g-queue').innerHTML = game.cols.map((col, c) => `<div class="qcol">${view(col).map(({ b, i, more }) => {
-      const tappable = i === 0 || pick, s = b.link ? side(b, c) : undefined;
-      const cls = [pick ? 'pickable' : (i === 0 ? '' : 'back'), s === undefined ? '' : s < c ? 'link-l' : 'link-r'].join(' ');
-      return blockHtml(b, tappable ? `data-action="tap-block" data-col="${c}" data-i="${i}"` : '', cls, i === 0, more);
+    $('g-queue').innerHTML = game.cols.map((col, c) => `<div class="qcol">${(pick ? col : col.slice(0, 3)).map((b, i) => {
+      const tappable = i === 0 || pick;
+      return blockHtml(b, tappable ? `data-action="tap-block" data-col="${c}" data-i="${i}"` : '', pick ? 'pickable' : (i === 0 ? '' : 'back'), i === 0);
     }).join('')}</div>`).join('');
+    drawLinkRods();
     refreshHints();
+  }
+  // golden chain between the two blocks of a linked pair (side by side or diagonal)
+  function drawLinkRods(q = $('g-queue')) {
+    const qr = q.getBoundingClientRect(), pairs = {};
+    q.querySelectorAll('.block[data-link]').forEach((el) => { (pairs[el.dataset.link] = pairs[el.dataset.link] || []).push(el); });
+    Object.values(pairs).forEach((els) => {
+      if (els.length < 2) return;
+      const [a, b] = els.map((el) => el.getBoundingClientRect());
+      const ax = a.left + a.width / 2 - qr.left, ay = a.top + a.height / 2 - qr.top + q.scrollTop;
+      const bx = b.left + b.width / 2 - qr.left, by = b.top + b.height / 2 - qr.top + q.scrollTop;
+      const len = Math.hypot(bx - ax, by - ay), rod = document.createElement('img');
+      rod.src = 'assets/sprites/puzzles/chain_connector.png'; rod.className = 'link-rod'; rod.alt = '';
+      Object.assign(rod.style, { left: (ax + bx) / 2 + 'px', top: (ay + by) / 2 + 'px', width: Math.max(24, len - a.width * 0.55) + 'px',
+        transform: `translate(-50%, -50%) rotate(${Math.atan2(by - ay, bx - ax)}rad)` });
+      q.appendChild(rod);
+    });
   }
   // ---- "can eat now" hints (like competitors' white ring) ----
   const COLOR_NAMES = {
@@ -1364,14 +1424,18 @@
   }
   // revealed = false keeps mystery blocks hidden ("?") until they reach the front
   // deep mystery (linked to another block) stays hidden until it is in a slot. more = blocks waiting inside a pipe
-  function blockHtml(b, attrs = '', cls = '', revealed = true, more = 0) {
+  function blockHtml(b, attrs = '', cls = '', revealed = true) {
+    const pz = (name) => `<img class="pz-img" src="assets/sprites/puzzles/${name}.png" alt="">`;
+    // line puzzle tiles
+    if (b.kind === 'lock') return `<button class="block pz-tile lock ${cls}" ${attrs} aria-label="Lock">${pz('lock_closed')}</button>`;
+    if (b.kind === 'hammer') return `<button class="block pz-tile hammer ${cls}" ${attrs} aria-label="Hammer">${pz('hammer')}</button>`;
+    if (b.kind === 'pipe') return `<button class="block pz-tile pipe ${cls}" ${attrs} aria-label="Pipe">${pz('pipe')}<b class="pz-count">${b.items.length}</b><i class="pz-arrow"></i></button>`;
     const hidden = b.mystery === 'deep' || (b.mystery && !revealed), color = D.PALETTE[b.color];
     const style = hidden ? '' : `style="background:linear-gradient(${color}, ${color})"`;
-    // in a slot the number = pixels still to be eaten (waiting + bees in the air); ✓ = linked block waiting for its partner
-    const n = b.amount + (b.inFlight || 0), locked = isLocked(b);
-    const classes = ['block', cls, hidden && 'mystery', b.frozen && 'frozen', locked && 'locked', b.pipe && 'pipe', b.link && 'linked'].filter(Boolean).join(' ');
-    return `<button class="${classes}" ${style} ${attrs}>${hidden ? '?' : n > 0 ? n : '✓'}` +
-      `${locked ? '<i class="pz-lock">🔒</i>' : ''}${more ? `<i class="pz-more">+${more}</i>` : ''}</button>`;
+    // in a slot the number = pixels still to be eaten (waiting + bugs in the air); ✓ = linked block waiting for its partner
+    const n = b.amount + (b.inFlight || 0);
+    const classes = ['block', cls, hidden && 'mystery', b.frozen && 'frozen', b.link && 'linked'].filter(Boolean).join(' ');
+    return `<button class="${classes}" ${style} ${attrs}${b.link ? ` data-link="${b.link}"` : ''}>${hidden ? '?' : n > 0 ? n : '✓'}</button>`;
   }
   // =====================================================================
   //  SPEED STORE (edit prices here)
@@ -1468,50 +1532,76 @@
     if (!b) return;
     if (idx > 0 && g.mode !== 'pick') return;
     const pick = g.mode === 'pick';
-    if (pick) { if (b.link) unlink(b); } // Free Pick takes any block alone (frozen and locked too)
+    const thaw = (c) => [c - 1, c + 1].forEach((k) => { const nb = g.cols[k] && g.cols[k][0]; if (nb && nb.frozen) nb.frozen = false; });
+    if (b.kind === 'pipe') return toast('Pipes push their blocks up when the space above them is free');
+    if (b.kind === 'lock' && pick) return toast('Locks open only with their key 🔑');
+    if (pick) { if (b.link) unlink(b); } // Free Pick takes any block alone (frozen too)
     else {
       const why = blockedReason(col);
       if (why) {
         const other = g.cols.some((c, i) => i !== col && c[0] && !blockedReason(i));
         if (other) return toast(why);
         // nothing else can be played: lift the restriction so the level can never get stuck
-        b.frozen = false; if (b.lock) g.unlocked.add(b.lock); if (b.link) unlink(b);
+        if (b.kind === 'lock') { g.unlocked.add(b.id); settle(g); renderQueue(); return toast('🔓 The lock opened!'); }
+        b.frozen = false; if (b.link) unlink(b);
       }
     }
-    // linked blocks go to the slots together
-    const pc = b.link ? linkPartnerCol(col) : undefined;
-    const need = pc === undefined ? 1 : 2, freeSlots = g.slots.map((s, i) => (s ? -1 : i)).filter((i) => i >= 0);
+    if (b.kind === 'hammer') { // hammers don't need a slot: they fly to the wood plank and hit it
+      column.splice(idx, 1); thaw(col);
+      if (pick) { spendBooster('pick'); g.mode = null; setHint(null); }
+      hammerFly(document.querySelector(`#g-queue [data-col="${col}"][data-i="${idx}"]`));
+      const broke = hitWood(g);
+      settle(g); haptic(); drawBoard(); renderQueue(); renderBoosters();
+      toast(broke ? '🔨 Crack! The wood broke' : `🔨 Bonk! ${g.wood ? g.wood.left : 0} more hammer${g.wood && g.wood.left === 1 ? '' : 's'} to break the wood`);
+      if (tutorialTap) nextCoachStep();
+      return;
+    }
+    // linked blocks go to the slots together (the partner comes along from wherever it is in the line)
+    const at = b.link ? findPartner(g, b) : null;
+    const need = at ? 2 : 1, freeSlots = g.slots.map((s, i) => (s ? -1 : i)).filter((i) => i >= 0);
     if (freeSlots.length < need) return toast(need > 1 ? 'Linked blocks need 2 free slots!' : 'No free slot — wait for the bees!');
     const group = [[col, idx]];
-    if (pc !== undefined) group.push([pc, 0]);
-    group.forEach(([c, i], n) => {
-      const blk = g.cols[c].splice(i, 1)[0];
+    if (at) group.push(at);
+    group.map(([c, i]) => [c, i, g.cols[c][i]]).forEach(([c, i, blk], n) => {
+      g.cols[c].splice(g.cols[c].indexOf(blk), 1);
       blk.mystery = false; blk.frozen = false; blk.inFlight = 0;
       g.slots[freeSlots[n]] = blk;
-      // using a column thaws frozen blocks at the front of the neighbouring columns
-      [c - 1, c + 1].forEach((k) => { const nb = g.cols[k] && g.cols[k][0]; if (nb && nb.frozen) nb.frozen = false; });
+      if (i === 0) thaw(c); // using a column thaws frozen blocks at the front of the neighbouring columns
     });
+    settle(g);
     if (pick) { spendBooster('pick'); g.mode = null; setHint(null); }
     haptic();
     renderSlots(); renderQueue(); renderBoosters();
     freeSlots.slice(0, need).forEach((i) => { const el = document.querySelector(`#screen-game [data-slot="${i}"]`); if (el) el.classList.add('pop'); });
     if (tutorialTap) nextCoachStep();
   }
-  // ---- queue puzzles: why the front block of a column can't be tapped right now (null = it can) ----
-  const isLocked = (b, g = game) => !!(b && b.lock && !g.unlocked.has(b.lock));
-  function linkPartnerCol(c, g = game) {
-    const b = g.cols[c][0];
-    return [c - 1, c + 1].find((k) => g.cols[k] && g.cols[k][0] && g.cols[k][0].link === b.link);
-  }
+  // ---- line puzzles: why the front item of a column can't be tapped right now (null = it can) ----
   function blockedReason(c, g = game) {
     const b = g.cols[c] && g.cols[c][0];
     if (!b) return 'empty';
+    if (b.kind === 'lock') return 'Locked! The bugs must collect its key 🔑 in the picture';
+    if (b.kind === 'pipe') return 'Pipes push their blocks up when the space above them is free';
+    if (b.kind === 'hammer') return null;
     if (b.frozen) return 'Frozen! Use a block next to it first';
-    if (isLocked(b, g)) return 'Locked! The bees must find its key 🔑 in the picture';
-    if (b.link && linkPartnerCol(c, g) === undefined) return 'Linked! Its partner must reach the front too';
+    if (b.link && !findPartner(g, b)) return 'Linked! Its partner is still inside a pipe';
     return null;
   }
   function unlink(b) { game.cols.flat().concat(game.slots).forEach((o) => { if (o && o.link === b.link) o.link = null; }); }
+  // the hammer flies from the line to the wood plank
+  function hammerFly(fromEl) {
+    if (!fromEl || !game.wood) return;
+    const scr = $('screen-game').getBoundingClientRect(), a = fromEl.getBoundingClientRect(), cv = $('g-board').getBoundingClientRect();
+    const W = game.cells[0].length, cs = cv.width / W, xs = game.wood.cells.map((k) => k % W), ys = game.wood.cells.map((k) => (k / W) | 0);
+    const tx = cv.left + ((Math.min(...xs) + Math.max(...xs) + 1) / 2) * cs, ty = cv.top + ((Math.min(...ys) + Math.max(...ys) + 1) / 2) * cs;
+    const img = document.createElement('img');
+    img.src = 'assets/sprites/puzzles/hammer.png'; img.className = 'hammer-fly'; img.alt = '';
+    Object.assign(img.style, { left: a.left - scr.left + a.width / 2 + 'px', top: a.top - scr.top + a.height / 2 + 'px' });
+    $('screen-game').appendChild(img);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      img.style.transform = `translate(${tx - a.left - a.width / 2}px, ${ty - a.top - a.height / 2}px) rotate(-70deg) scale(1.3)`;
+    }));
+    setTimeout(() => img.remove(), 700);
+  }
 
   // ---- bees: which pixel can be eaten? (genre rule, like Pixel Hunt / Colony Flow) ----
   // A pixel is a target when it touches the bottom edge or touches a cleared space connected to the bottom
@@ -1607,8 +1697,7 @@
   // what the player sees when a bee (or the Wind) triggers a puzzle
   function puzzleEvents(ev) {
     if (!ev.length) return;
-    if (ev.includes('key')) { toast('🔑 Key found! A locked block opened'); renderQueue(); }
-    if (ev.includes('hammer')) toast('🔨 Hammer found! The wood crates break');
+    if (ev.includes('key')) { toast('🔑 Key collected! A lock opened'); settle(game); renderQueue(); }
     if (ev.includes('cookie')) toast('🍪 Crunch! The cookie broke');
     if (ev.some((e) => e !== 'big') && state.settings.haptics) PSNative.vibrate('medium');
   }
@@ -1623,8 +1712,8 @@
   // (not frozen) must be able to eat right now. Tries several mixes, then moves a usable block to the front.
   // Puzzle pieces (frozen, locks, links, pipes, mystery) stay where they are: only the colors are mixed.
   function shuffleQueue(g) {
-    const all = g.cols.flat(), pay = all.map((b) => ({ color: b.color, amount: b.amount }));
-    const fronts = () => g.cols.map((c, i) => (c[0] && !blockedReason(i, g) ? c[0] : null)).filter(Boolean);
+    const all = g.cols.flat().filter(isBlock), pay = all.map((b) => ({ color: b.color, amount: b.amount }));
+    const fronts = () => g.cols.map((c, i) => (isBlock(c[0]) && !blockedReason(i, g) ? c[0] : null)).filter(Boolean);
     for (let attempt = 0; attempt < 30; attempt++) {
       for (let i = pay.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pay[i], pay[j]] = [pay[j], pay[i]]; }
       all.forEach((b, i) => Object.assign(b, pay[i]));
@@ -1632,7 +1721,7 @@
     }
     // no luck: give a playable front block a color that can eat now
     let f = fronts()[0];
-    if (!f) { f = all[0]; if (!f) return; f.frozen = false; if (f.lock) g.unlocked.add(f.lock); if (f.link) unlink(f); }
+    if (!f) { f = all[0]; if (!f) return; f.frozen = false; if (f.link) unlink(f); }
     const p = all.find((b) => findTarget(g, b.color));
     if (p && p !== f) [f.color, f.amount, p.color, p.amount] = [p.color, p.amount, f.color, f.amount];
   }
@@ -1680,7 +1769,8 @@
     // blocks of that color leave the line; their linked partners become normal blocks
     g.cols.flat().filter((b) => b.color === color && b.link).forEach(unlink);
     g.cols = g.cols.map((col) => col.filter((b) => b.color !== color));
-    puzzleEvents(events);
+    g.cols.flat().forEach((it) => { if (it.kind === 'pipe') it.items = it.items.filter((b) => b.color !== color); });
+    puzzleEvents(events); settle(g);
     g.slots.forEach((b) => { if (b && b.color === color) b.amount = 0; });
     g.mode = null; setHint(null); spendBooster('wing');
     drawBoard(); renderQueue(); renderSlots();
@@ -1719,22 +1809,22 @@
   }
   // New booster / new puzzle feature pop-up
   const FEATURES = {
-    mystery: { icon: 'block_mystery', name: 'Mystery Blocks', desc: "You can't see the color and amount until it reaches the front." },
-    frozen:  { icon: 'block_ice', name: 'Frozen Blocks', desc: 'Frozen blocks must wait until the block next to them is used.' },
-    hidden:  { emoji: '❓', name: 'Hidden Pixels', desc: 'Some pixels are covered in grey. Eat the pixels around them to see their color!' },
-    linked:  { emoji: '🔗', name: 'Linked Blocks', desc: 'Chained blocks go to the slots together (you need 2 free slots) and leave only when BOTH are done.' },
-    big:     { emoji: '🟥', name: 'Big Pixels', desc: 'Big pixels need 4 bees to be eaten, and they block the way until the last bite.' },
-    pipe:    { emoji: '🟩', name: 'Pipes', desc: 'A pipe holds several blocks. You only see the next one: the others move up as you use them.' },
-    key:     { emoji: '🔑', name: 'Key & Lock', desc: 'Locked blocks open when a bee collects their key hidden in the picture.' },
-    wood:    { emoji: '🔨', name: 'Wood Crates', desc: 'Wood crates block the bees. Eat the pixel with the hammer to break them all!' },
-    cookie:  { emoji: '🍪', name: 'Cookie Blocker', desc: 'The cookie blocks the bees. Eat as many pixels as its number to break it!' },
-    mlinked: { emoji: '❔', name: 'Mystery Links', desc: 'A mystery block chained to another block: you see its color only when it lands in a slot.' },
+    mystery: { icon: 'puzzles/block_mystery', name: 'Mystery Blocks', desc: "You can't see the color and amount until it reaches the front." },
+    frozen:  { icon: 'puzzles/block_ice', name: 'Frozen Blocks', desc: 'Frozen blocks thaw when you use a block next to them.' },
+    hidden:  { icon: 'puzzles/hidden_pixel', name: 'Hidden Pixels', desc: 'Hidden pixels reveal their color when the path to them is cleared.' },
+    linked:  { icon: 'puzzles/linked_blocks', name: 'Linked Blocks', desc: 'Linked blocks are picked together (2 free slots) and leave only when BOTH are done.' },
+    big:     { icon: 'puzzles/big_pixel', name: 'Big Pixel', desc: 'Big pixels need more bugs to be fully cleared. The number shows how many.' },
+    pipe:    { icon: 'puzzles/pipe', name: 'Pipe', desc: 'Pipes hold blocks waiting to move upward. The number shows how many are inside.' },
+    key:     { icon: 'puzzles/key', name: 'Key & Lock', desc: 'Collect the keys in the picture to unlock the locks in the line.' },
+    wood:    { icon: 'puzzles/hammer', name: 'Wood Block', desc: 'Find the hammers in the line to break the wood block. The number shows how many it needs.' },
+    cookie:  { icon: 'puzzles/cookie_intact', name: 'Cookie Blocker', desc: 'Clear pixels to break the cookie blocker. The number shows how many.' },
+    mlinked: { icon: 'puzzles/mystery_linked_blocks', name: 'Mystery Links', desc: 'A mystery block linked to another block: you see its color only when it lands in a slot.' },
   };
   // order the "New Feature!" pop-ups appear in when a level has several new puzzles
   const PUZZLE_ORDER = ['mystery', 'frozen', 'hidden', 'linked', 'big', 'pipe', 'key', 'wood', 'cookie', 'mlinked'];
   function showUnlock(kind, item) {
     $('unlock-title').textContent = kind === 'booster' ? 'New Booster!' : 'New Feature!';
-    $('unlock-icon').style.display = item.emoji ? 'none' : ''; $('unlock-emoji').hidden = !item.emoji;
+    $('unlock-icon').style.display = item.emoji ? 'none' : ''; $('unlock-emoji').hidden = !item.emoji; // (emoji kept as a fallback)
     $('unlock-emoji').textContent = item.emoji || '';
     if (item.icon) $('unlock-icon').src = `assets/sprites/${item.icon}.png`;
     $('unlock-name').textContent = item.name;
@@ -1810,19 +1900,22 @@
     const thaw = (c) => [c - 1, c + 1].forEach((k) => { const n = g.cols[k] && g.cols[k][0]; if (n && n.frozen) n.frozen = false; });
     let turn = 0, guard = 0;
     while (g.cols.some((c) => c.length) && guard++ < 10000) {
+      settle(g);
       const c = turn % 3; turn += 1;
       const col = g.cols[c];
       if (!col.length) continue;
       const b = col[0];
+      if (b.kind === 'lock') return `lock reached before its key (column ${c + 1})`;
+      if (b.kind === 'hammer') { col.shift(); thaw(c); hitWood(g); continue; }
       if (b.frozen) return `frozen block blocks the solution (column ${c + 1})`;
-      if (b.lock && !g.unlocked.has(b.lock)) return `locked block comes before its key (column ${c + 1})`;
       const group = [col.shift()];
       thaw(c);
       if (b.link) {
-        const pc = [c - 1, c + 1].find((k) => g.cols[k] && g.cols[k][0] && g.cols[k][0].link === b.link);
-        if (pc === undefined) return `linked partner isn't at the front (column ${c + 1})`;
-        group.push(g.cols[pc].shift()); thaw(pc);
-        if (pc === c + 1) turn += 1; // its turn is used up
+        const at = findPartner(g, b);
+        if (!at) return `linked partner is hidden in a pipe (column ${c + 1})`;
+        group.push(g.cols[at[0]].splice(at[1], 1)[0]);
+        if (at[1] === 0) thaw(at[0]);
+        turn += 1; // the partner is the next block of the solution: its turn is used up
       }
       // the blocks eat one pixel each in turn (linked blocks work at the same time)
       const left = group.map((x) => x.amount);
@@ -1836,6 +1929,7 @@
         });
         if (!moved) return `stuck: a "${group[0].color}" block can't reach its pixels`;
       }
+      settle(g);
     }
     return g.remaining === 0 ? 'ok' : `${g.remaining} pixel(s) left at the end`;
   }
@@ -1845,28 +1939,38 @@
     const g = buildLevel(theme, diff, index), open = openFn(g), take = takeFn(g), W = g.cells[0].length;
     const slots = Array(g.cfg.slots).fill(null);
     const free = () => slots.filter((s) => !s).length;
-    const partnerCol = (c) => { const b = g.cols[c][0]; return [c - 1, c + 1].find((k) => g.cols[k] && g.cols[k][0] && g.cols[k][0].link === b.link); };
+    const thaw = (c) => [c - 1, c + 1].forEach((k) => { const n = g.cols[k] && g.cols[k][0]; if (n && n.frozen) n.frozen = false; });
     const playable = (c) => {
       const b = g.cols[c][0];
-      if (!b || b.frozen || (b.lock && !g.unlocked.has(b.lock))) return false;
-      return b.link ? partnerCol(c) !== undefined && free() >= 2 : free() >= 1;
+      if (!isBlock(b) || b.frozen) return false;
+      return b.link ? !!findPartner(g, b) && free() >= 2 : free() >= 1;
     };
-    const takeCol = (c) => { const b = g.cols[c].shift(); [c - 1, c + 1].forEach((k) => { const n = g.cols[k] && g.cols[k][0]; if (n && n.frozen) n.frozen = false; }); return b; };
     const place = (c) => {
-      const pc = g.cols[c][0].link ? partnerCol(c) : undefined, group = [takeCol(c)];
-      if (pc !== undefined) group.push(takeCol(pc));
+      const b = g.cols[c].shift(), group = [b];
+      thaw(c);
+      const at = b.link && findPartner(g, b);
+      if (at) { group.push(g.cols[at[0]].splice(at[1], 1)[0]); if (at[1] === 0) thaw(at[0]); }
       const link = group.length > 1 ? {} : null;
-      group.forEach((b) => { slots[slots.indexOf(null)] = { color: b.color, amount: b.amount, link }; });
+      group.forEach((x) => { slots[slots.indexOf(null)] = { color: x.color, amount: x.amount, link }; });
+      settle(g);
     };
     for (let guard = 0; guard < 20000; guard++) {
       if (g.remaining <= 0) return true;
+      settle(g);
+      // hammers at the front are always used straight away
+      const useHammers = () => g.cols.forEach((col, c) => { while (g.cols[c][0] && g.cols[c][0].kind === 'hammer') { g.cols[c].shift(); thaw(c); hitWood(g); settle(g); } });
       // fill free slots
       while (slots.includes(null)) {
-        let c = g.cols.findIndex((col, i) => col[0] && playable(i) && pickTarget(g.cells, open, col[0].color, take));
-        if (c < 0 && slots.every((s) => !s)) c = g.cols.findIndex((col, i) => col[0] && playable(i));
+        useHammers();
+        let c = g.cols.findIndex((col, i) => playable(i) && pickTarget(g.cells, open, col[0].color, take));
+        if (c < 0 && slots.every((s) => !s)) c = g.cols.findIndex((col, i) => playable(i));
         if (c < 0 && slots.every((s) => !s)) { // nothing playable at all: the game lifts the restriction (like in tapBlock)
           c = g.cols.findIndex((col) => col[0]);
-          if (c >= 0) { const b = g.cols[c][0]; b.frozen = false; if (b.lock) g.unlocked.add(b.lock); b.link = null; }
+          if (c >= 0) {
+            const b = g.cols[c][0];
+            if (!isBlock(b)) { if (b.kind === 'lock') g.unlocked.add(b.id); settle(g); continue; }
+            b.frozen = false; b.link = null;
+          }
         }
         if (c < 0) break;
         place(c);
@@ -1911,8 +2015,8 @@
     }).join(' · ');
     // puzzles: force each one into every level of its difficulty -> is it kept (solvable) and actually there?
     const there = (lv, p) => ({ linked: lv.cols.flat().some((b) => b.link), mlinked: lv.cols.flat().some((b) => b.mystery === 'deep'),
-      key: lv.cols.flat().some((b) => b.lock), pipe: lv.cols.flat().some((b) => b.pipe), hidden: lv.hidden.size > 0, big: lv.big.size > 0,
-      wood: [...lv.cover.values()].includes('wood'), cookie: !!lv.cookie }[p]);
+      key: lv.cols.flat().some((b) => b.kind === 'lock'), pipe: lv.cols.flat().some((b) => b.kind === 'pipe'), hidden: lv.hidden.size > 0, big: lv.big.size > 0,
+      wood: !!lv.wood && lv.cols.flat().some((b) => b.kind === 'hammer'), cookie: !!lv.cookie }[p]);
     const forced = PUZZLE_ORDER.filter((p) => PUZZLE_DIFF[p] && !['mystery', 'frozen'].includes(p)).map((p) => {
       let kept = 0, good = 0, n = 0;
       D.THEMES.forEach((t) => { for (let i = 0; i < D.LEVELS_PER_DIFFICULTY; i++) {
@@ -1958,14 +2062,16 @@
         if (game.slots.some(Boolean) || game.bees.length) return;
         const c = turn % 3, b = game.cols[c][0];
         if (!b) { turn += 1; return; }
+        if (b.kind === 'lock') return; // its key is being collected
+        if (b.kind === 'hammer') { tapBlock(c, 0); turn += 1; return; }
         if (b.frozen) { const n = [c - 1, c + 1].find((k) => game.cols[k] && game.cols[k][0]); if (n !== undefined) tapBlock(n, 0); else tapBlock(c, 0); return; }
         // wait until the previous block of the solution has finished before taking one that can't eat yet
         if (!findTarget(game, b.color) && game.bees.length) return;
-        const pc = b.link ? linkPartnerCol(c) : undefined;
-        tapBlock(c, 0); turn += pc === c + 1 ? 2 : 1; return; // a linked pair uses the partner's turn too
+        tapBlock(c, 0); turn += b.link ? 2 : 1; return; // a linked pair uses the partner's turn too
       }
       const ok = (i) => game.cols[i][0] && !blockedReason(i);
-      let c = game.cols.findIndex((col, i) => ok(i) && findTarget(game, col[0].color));
+      let c = game.cols.findIndex((col) => col[0] && col[0].kind === 'hammer'); // hammers first
+      if (c < 0) c = game.cols.findIndex((col, i) => ok(i) && findTarget(game, col[0].color));
       if (c < 0 && !game.bees.length) c = game.cols.findIndex((col, i) => ok(i)); // nothing useful: any block
       if (c < 0 && !game.bees.length) c = game.cols.findIndex((col) => col[0]);
       if (c >= 0) tapBlock(c, 0);
@@ -2086,7 +2192,8 @@
     // #pzline_key shows the whole line (Free Pick) to see the puzzle blocks
     ...Object.fromEntries(PUZZLE_ORDER.flatMap((p) => [[`puzzle_${p}`, () => testPuzzle(p)], [`pzsolve_${p}`, () => testPuzzle(p, true)],
       [`pzline_${p}`, () => { testPuzzle(p, true); clearInterval(window.__bot); game.speed = 1; state.debugBoosters = true; state.boosters.pick = 5; useBooster('pick');
-        const el = document.querySelector('#g-queue .block.locked, #g-queue .block.linked, #g-queue .block.pipe');
+        const sel = { key: '.pz-tile.lock', wood: '.pz-tile.hammer', pipe: '.pz-tile.pipe', linked: '.linked', mlinked: '.linked' }[p] || '.block';
+        const el = document.querySelector('#g-queue ' + sel);
         if (el) el.scrollIntoView({ block: 'center' }); }]])),
     story_last: () => { ACTIONS.story(); while (story.i < STORY.length - 1) nextStory(); }, // dev: jump to the last scene
     'story-next': () => nextStory(),
@@ -2294,7 +2401,8 @@
   setInterval(renderEventTimer, 30000);
   // PixiJS gameplay renderer (board, bugs, wind). If WebGL is missing the game falls back to the 2D canvas.
   const pixiReady = PSRender.init($('screen-game'),
-    ['bee_fly', 'ladybug_fly', 'beetle', 'butterfly', 'ant', 'firefly', 'booster_wind'].map((n) => `assets/sprites/${n}.png`))
+    ['bee_fly', 'ladybug_fly', 'beetle', 'butterfly', 'ant', 'firefly', 'booster_wind'].map((n) => `assets/sprites/${n}.png`)
+      .concat(['block_wood', 'cookie_intact', 'cookie_damaged', 'key', 'hidden_pixel'].map((n) => `assets/sprites/puzzles/${n}.png`)))
     .catch((e) => console.warn('PixiJS unavailable, using 2D canvas', e));
   // phone app: (re)schedule the "daily reward is ready" notification
   PSNative.scheduleDailyReward(state.settings.notifications);

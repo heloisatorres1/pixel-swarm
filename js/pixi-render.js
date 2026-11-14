@@ -32,7 +32,7 @@ window.PSRender = (function () {
     boardC = new PIXI.Container(); overC = new PIXI.Container(); beeLayer = new PIXI.Container(); fxLayer = new PIXI.Container();
     app.stage.addChild(boardC, overC, beeLayer, fxLayer);
     pixelTex = makePixelTexture();
-    await Promise.race([PIXI.Assets.load(textureUrls), new Promise((ok) => setTimeout(ok, 8000))]);
+    await Promise.race([PIXI.Assets.load(textureUrls).then(() => { lastItems = ''; }), new Promise((ok) => setTimeout(ok, 8000))]);
     app.ticker.add((tk) => stepFx(tk.deltaMS));
     document.body.classList.add('pixi-on'); // CSS hides the HTML fallback board
   }
@@ -67,66 +67,74 @@ window.PSRender = (function () {
     frame();
   }
   // show/hide pixels to match the game state (eaten pixels disappear).
-  // look (from js/app.js boardLook): hide(k) / tint(k) per cell + puzzle items drawn on top
+  // look (from js/app.js boardLook): color / hide / hidden per cell + puzzle items drawn on top
+  // a puzzle sprite once it has loaded (null until then: a plain shape is drawn instead)
+  const PZ = (name) => PIXI.Assets.get(`assets/sprites/puzzles/${name}.png`) || null;
   function syncBoard(cells, look) {
     if (!app) return;
+    const hidTex = look ? PZ('hidden_pixel') : null;
     sprites.forEach((row, y) => row.forEach((s, x) => {
       if (!s) return;
       const k = y * cols + x, ch = look ? look.color(k, cells[y][x]) : cells[y][x];
       s.visible = !!ch && !(look && look.hide(k));
-      if (s.visible) s.tint = hex((look && look.tint(k)) || pal[ch]);
+      if (!s.visible) return;
+      const hid = !!(look && look.hidden(k));
+      // hidden pixels: purple "?" cube sprite instead of the colored pixel
+      if (hid !== !!s.isHidden && (hidTex || !hid)) {
+        s.isHidden = hid; s.texture = hid ? hidTex : pixelTex;
+        s.width = s.height = cellPx - gapPx;
+      }
+      s.tint = hid ? (s.isHidden ? 0xffffff : 0x7b68a6) : hex(pal[ch]);
     }));
     if (look) drawItems(look);
     frame();
   }
   function txt(text, size, opts = {}) {
-    const t = new PIXI.Text({ text, style: { fontFamily: '"Lilita One", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif',
-      fontSize: Math.round(size), fill: opts.fill || 0xffffff, stroke: opts.stroke ? { color: opts.stroke, width: Math.max(2, size / 5) } : undefined } });
+    const t = new PIXI.Text({ text, style: { fontFamily: '"Lilita One", sans-serif',
+      fontSize: Math.round(size), fill: opts.fill || 0xffffff, stroke: { color: opts.stroke || 0x3a1d08, width: Math.max(2, size / 5) } } });
     t.anchor.set(0.5);
     t.resolution = Math.max(2, window.devicePixelRatio || 1);
     return t;
   }
-  // puzzle pieces; rebuilt only when something about them changed
+  // puzzle pieces on the picture; rebuilt only when something about them changed
   function drawItems(look) {
-    const key = JSON.stringify(look.items) + look.hiddenMark + (look.hiddenMark ? sprites.flat().filter((s) => s && s.visible && s.tint === hex('#6b6380')).length : '');
+    const key = JSON.stringify(look.items);
     if (key === lastItems) return;
     lastItems = key;
     overC.removeChildren().forEach((o) => o.destroy({ children: true }));
     const c = cellPx, g0 = gapPx;
-    // "?" on hidden pixels (only when the pixels are big enough to read it)
-    if (look.hiddenMark) sprites.forEach((row, y) => row.forEach((s, x) => {
-      if (s && s.visible && s.tint === hex('#6b6380')) { const t = txt('?', c * 0.7, { fill: 0xd9d2f0 }); t.position.set(x * c + (c - g0) / 2, y * c + (c - g0) / 2); overC.addChild(t); }
-    }));
     look.items.forEach((it) => {
       const x = it.x * c, y = it.y * c, w = (it.w || 1) * c - g0, h = (it.h || 1) * c - g0;
-      if (it.kind === 'crate') {
-        const gr = new PIXI.Graphics();
-        gr.roundRect(x, y, w, h, c * 0.12).fill(0xc0823f).stroke({ color: 0x6b3a14, width: Math.max(1, c * 0.12) });
-        gr.moveTo(x + w * 0.15, y + h * 0.5).lineTo(x + w * 0.85, y + h * 0.5).stroke({ color: 0x8a5226, width: Math.max(1, c * 0.1) });
-        overC.addChild(gr);
-      } else if (it.kind === 'cookie') {
-        const gr = new PIXI.Graphics();
-        gr.circle(x + w / 2, y + h / 2, Math.min(w, h) / 2).fill(0xe0a95c).stroke({ color: 0x7a4514, width: Math.max(2, c * 0.3) });
-        // chocolate chips
-        [[0.25, 0.3], [0.7, 0.25], [0.4, 0.7], [0.8, 0.7], [0.15, 0.65]].forEach(([fx, fy]) =>
-          gr.circle(x + w * fx, y + h * fy, Math.max(1.5, Math.min(w, h) * 0.08)).fill(0x5a2f12));
-        overC.addChild(gr);
-        const t = txt(it.text, Math.max(13, Math.min(w, h) * 0.5), { stroke: 0x4a2408 }); t.position.set(x + w / 2, y + h / 2); overC.addChild(t);
+      if (it.kind === 'plank') {
+        // wood plank / biscuit: the sprite stretched over the covered area (9-slice keeps the corners round)
+        const tex = PZ(it.tex);
+        if (tex) {
+          const border = Math.round(Math.min(tex.width, tex.height) * 0.3);
+          const sp = new PIXI.NineSliceSprite({ texture: tex, leftWidth: border, rightWidth: border, topHeight: border, bottomHeight: border });
+          sp.position.set(x, y); sp.width = w; sp.height = h;
+          overC.addChild(sp);
+        } else {
+          const gr = new PIXI.Graphics();
+          gr.roundRect(x, y, w, h, c * 0.6).fill(it.tex === 'block_wood' ? 0xb97a3e : 0xe8b866).stroke({ color: 0x6b3a14, width: 2 });
+          overC.addChild(gr);
+        }
+        const t = txt(it.text, Math.max(18, Math.min(h * 0.75, w * 0.4))); t.position.set(x + w / 2, y + h / 2); overC.addChild(t);
       } else if (it.kind === 'big') {
+        // one big glossy pixel in its color + how many bugs it still needs
         const gr = new PIXI.Graphics();
-        // one big glossy tile with a dark outline + how many bites are left
         gr.roundRect(x - 1, y - 1, w + 2, h + 2, c * 0.45).fill(0x2a1606);
-        gr.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, c * 0.4).fill(hex(it.color)).stroke({ color: 0xffffff, width: Math.max(1.5, c * 0.22), alpha: 0.9 });
+        gr.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, c * 0.4).fill(hex(it.color)).stroke({ color: 0x46b6ff, width: Math.max(1.5, c * 0.22) });
         gr.roundRect(x + w * 0.15, y + h * 0.12, w * 0.7, h * 0.16, c * 0.15).fill({ color: 0xffffff, alpha: 0.45 });
         overC.addChild(gr);
-        const t = txt(it.text, Math.max(11, Math.min(w, h) * 0.6), { stroke: 0x2a1606 }); t.position.set(x + w / 2, y + h / 2 + 1); overC.addChild(t);
+        const t = txt(it.text, Math.max(11, Math.min(w, h) * 0.6)); t.position.set(x + w / 2, y + h / 2 + 1); overC.addChild(t);
       } else if (it.kind === 'icon') {
-        // white badge so the key / hammer stands out on any color
-        const r = Math.max(11, c * 1.2), cx = x + (c - g0) / 2, cy = y + (c - g0) / 2;
-        const gr = new PIXI.Graphics();
-        gr.circle(cx, cy, r).fill({ color: 0xfff8e6 }).stroke({ color: 0x8a4a1a, width: Math.max(2, r * 0.18) });
-        overC.addChild(gr);
-        const t = txt(it.text, r * 1.25); t.position.set(cx, cy + 1); overC.addChild(t);
+        // the key sprite, a bit bigger than its pixel so it's easy to spot
+        const tex = PZ(it.tex), size = Math.max(28, c * 3.4);
+        if (!tex) { const t = txt('🔑', size * 0.7); t.position.set(x + (c - g0) / 2, y + (c - g0) / 2); overC.addChild(t); return; }
+        const sp = new PIXI.Sprite(tex);
+        sp.anchor.set(0.5); sp.scale.set(size / Math.max(tex.width, tex.height));
+        sp.position.set(x + (c - g0) / 2, y + (c - g0) / 2);
+        overC.addChild(sp);
       }
     });
   }

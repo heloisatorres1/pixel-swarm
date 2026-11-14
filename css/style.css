@@ -658,20 +658,30 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
   font: 400 24px "Lilita One"; color: #fff; paint-order: stroke fill; -webkit-text-stroke: 5px rgba(40,20,5,.75); transition: transform .1s; }
 .block:active { transform: scale(.92); }
 .block.back { transform: scale(.88); opacity: .85; pointer-events: none; }
-.block.mystery { background: linear-gradient(#c9a2ff, #8a52e8) !important; }
-.block.frozen::after { content: ""; position: absolute; inset: -3px; border-radius: 16px; background: linear-gradient(135deg, rgba(220,245,255,.85), rgba(140,210,255,.6)); border: 3px solid #fff; }
 .slot .block { width: 50px; height: 50px; font-size: 20px; border-radius: 12px; }
-/* ---- queue puzzles ---- */
-.block.locked { filter: saturate(.55) brightness(.85); }
-.block .pz-lock { position: absolute; right: -8px; bottom: -8px; font-size: 26px; font-style: normal; filter: drop-shadow(0 2px 1px rgba(0,0,0,.4)); }
-.block.linked { box-shadow: 0 0 0 3px #9aa3ad, 0 4px 0 rgba(0,0,0,.25); }
-.block.link-r::before, .block.link-l::before { content: "🔗"; position: absolute; top: 50%; z-index: 2; font-size: 17px; transform: translateY(-50%) rotate(45deg);
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
-.block.link-r::before { right: -17px; } .block.link-l::before { left: -17px; }
-.block.pipe { border: 4px solid #2f9a3c; box-shadow: 0 0 0 3px #17561f, inset 0 7px 0 rgba(255,255,255,.28), 0 5px 0 #17561f; border-radius: 12px 12px 18px 18px; }
-.block .pz-more { position: absolute; left: 50%; bottom: -12px; transform: translateX(-50%); padding: 0 7px; border-radius: 10px; background: #2f9a3c;
-  border: 2px solid #17561f; font: 400 13px "Lilita One"; font-style: normal; color: #fff; line-height: 18px; white-space: nowrap; }
-.slot .block.linked { box-shadow: 0 0 0 3px #9aa3ad; }
+/* ---- line puzzles (sprites: assets/sprites/puzzles) ---- */
+/* mystery block: the violet "?" cube; frozen: the ice cube over the block (its number still shows) */
+.block.mystery { background: url(../assets/sprites/puzzles/block_mystery.png) center / 112% 112% no-repeat !important; border-color: transparent;
+  color: transparent; text-shadow: none; }
+.block.frozen::after { content: ""; position: absolute; inset: -5px; border: 0; border-radius: 16px;
+  background: url(../assets/sprites/puzzles/block_ice.png) center / 100% 100% no-repeat; opacity: .82; }
+/* lock / hammer / pipe tiles sit in the line like blocks */
+.block.pz-tile { background: none !important; border: 0; box-shadow: none; }
+.block.pz-tile .pz-img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 2px rgba(0,0,0,.35)); pointer-events: none; }
+.block.pz-tile.lock .pz-img { width: 86%; height: 86%; }
+.block.pz-tile.hammer { animation: hammerwiggle 1.6s ease-in-out infinite; }
+@keyframes hammerwiggle { 0%, 70%, 100% { transform: rotate(0); } 80% { transform: rotate(-12deg); } 90% { transform: rotate(8deg); } }
+.block.pz-tile.pipe .pz-count { position: absolute; left: 50%; top: 56%; transform: translate(-50%, -50%); font: 400 24px "Lilita One"; color: #fff;
+  paint-order: stroke fill; -webkit-text-stroke: 5px #5a2a2a; }
+.block.pz-tile.pipe .pz-arrow { position: absolute; left: 50%; top: -9px; transform: translateX(-50%); width: 0; height: 0;
+  border: 7px solid transparent; border-bottom: 9px solid #fff4e0; border-top: 0; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
+.block.back.pz-tile { opacity: .9; }
+/* golden chain between linked blocks (drawn by drawLinkRods in js/app.js) */
+.link-rod { position: absolute; z-index: 3; height: 18px; object-fit: fill; pointer-events: none; filter: drop-shadow(0 2px 1px rgba(0,0,0,.35)); }
+.slots .link-rod { height: 15px; }
+/* a hammer flying from the line to the wood plank */
+.hammer-fly { position: absolute; z-index: 20; width: 54px; margin: -27px 0 0 -27px; pointer-events: none;
+  transition: transform .6s cubic-bezier(.4,-0.3,.6,1); filter: drop-shadow(0 4px 3px rgba(0,0,0,.35)); }
 .booster-bar { position: relative; z-index: 2; display: flex; justify-content: center; gap: 12px; padding: 8px 10px; margin: 0 12px 8px; border-radius: 26px;
   background: linear-gradient(#c98a4a, #9a5a24); border: 4px solid #6e3410; box-shadow: inset 0 3px 0 rgba(255,255,255,.3), 0 4px 0 #4d2a0e; }
 .bst { position: relative; width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center;
