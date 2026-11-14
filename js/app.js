@@ -1753,7 +1753,7 @@
     const finish = () => setTimeout(() => {
       $('loading').classList.add('done');
       setTimeout(() => { $('loading').remove(); done(); }, 500);
-    }, Math.max(300, 1500 - (Date.now() - start))); // show it at least ~1.5 s
+    }, Math.max(400, 2500 - (Date.now() - start))); // show it at least ~2.5 s (like commercial games)
     PRELOAD.forEach((src) => { const im = new Image(); im.onload = im.onerror = step; im.src = src; });
     (document.fonts ? document.fonts.ready : Promise.resolve()).then(step, step);
   }
