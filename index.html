@@ -10,6 +10,20 @@
 <body>
   <div id="app" class="phone">
 
+    <!-- ============ STORY CUTSCENE (first launch only, after the age gate; slides in js/app.js → STORY) ============ -->
+    <div class="cutscene" id="cutscene" hidden>
+      <div class="cs-slides" id="cs-slides" data-action="story-next"></div>
+      <button class="cs-skip" data-action="story-skip">Skip ›</button>
+      <div class="cs-caption">
+        <h2 id="cs-title"></h2>
+        <p id="cs-text"></p>
+        <div class="cs-foot">
+          <span class="cs-dots" id="cs-dots"></span>
+          <button class="gbtn green small" data-action="story-next"><span id="cs-next">Next ›</span></button>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ LOADING SCREEN (downloads/screens/00_loading.png) ============ -->
     <div class="loading" id="loading">
       <img class="ld-logo" src="assets/sprites/logo.png" alt="Pixel Swarm">
@@ -627,6 +641,7 @@
             <button data-action="dbg" data-cmd="p_booster">New booster</button>
             <button data-action="dbg" data-cmd="p_feature">New feature</button>
             <button data-action="dbg" data-cmd="p_tutorial">Tutorial</button>
+            <button data-action="dbg" data-cmd="p_story">Story cutscene</button>
             <button data-action="dbg" data-cmd="p_ad">Video ad</button>
           </div>
           <h4>Danger</h4>

@@ -961,6 +961,34 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .speed-btn small[hidden] { display: none; }
 /* an opened AD slot stays at its side position and works like a normal slot (same size as the free ones) */
 
+/* ---------- Story cutscene ---------- */
+.cutscene { position: absolute; inset: 0; z-index: 90; background: #120a04; overflow: hidden; }
+.cutscene[hidden] { display: none; }
+.cs-slides { position: absolute; inset: 0; cursor: pointer; }
+.cs-slide { position: absolute; inset: 0; opacity: 0; transition: opacity .9s ease; overflow: hidden; }
+.cs-slide.on { opacity: 1; }
+/* slow cinematic zoom (Ken Burns); start/end zoom + focus point come from each slide */
+.cs-slide img { width: 100%; height: 100%; object-fit: cover; transform-origin: var(--focus, 50% 50%); transform: scale(var(--from, 1)); }
+.cs-slide.on img { animation: kenburns 9s ease-out forwards; }
+@keyframes kenburns { from { transform: scale(var(--from, 1)); } to { transform: scale(var(--to, 1.12)); } }
+.cutscene::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 45%; pointer-events: none;
+  background: linear-gradient(transparent, rgba(20,10,2,.75)); }
+.cs-skip { position: absolute; z-index: 2; right: 14px; top: max(14px, env(safe-area-inset-top)); padding: 6px 14px; border-radius: 16px;
+  background: rgba(20,10,2,.55); border: 2px solid rgba(255,255,255,.6); font: 400 16px "Lilita One"; color: #fff; }
+.cs-caption { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: max(20px, env(safe-area-inset-bottom)); padding: 30px 16px 12px;
+  border-radius: 22px; background: linear-gradient(#fff8e8, #ffe8c2); border: 4px solid #c9762c; box-shadow: 0 0 0 3px #6e3410, 0 8px 18px rgba(0,0,0,.4); }
+.cs-caption h2 { position: absolute; left: 50%; top: -24px; transform: translateX(-50%); margin: 0; padding: 4px 18px 6px; white-space: nowrap; border-radius: 14px;
+  background: linear-gradient(#ffbe6a, #e9842f); border: 3px solid #6e3410; box-shadow: inset 0 2px 0 rgba(255,255,255,.5), 0 3px 0 #6e3410;
+  font: 400 20px "Lilita One"; color: #fff; paint-order: stroke fill; -webkit-text-stroke: 5px var(--ink); }
+.cs-caption p { margin: 0 0 10px; min-height: 60px; text-align: center; font-weight: 700; font-size: 15.5px; line-height: 1.35; color: #4a2810; }
+.cs-caption.fade p, .cs-caption.fade h2 { animation: csin .6s ease-out; }
+@keyframes csin { from { opacity: 0; transform: translateY(8px); } }
+.cs-caption.fade h2 { animation-name: csin2; }
+@keyframes csin2 { from { opacity: 0; transform: translate(-50%, 8px); } to { transform: translate(-50%, 0); } }
+.cs-foot { display: flex; align-items: center; justify-content: space-between; }
+.cs-dots { display: flex; gap: 6px; } .cs-dots i { width: 10px; height: 10px; border-radius: 50%; background: #e9c48e; } .cs-dots i.on { background: #e9842f; box-shadow: 0 0 0 2px #fff; }
+@media (prefers-reduced-motion: reduce) { .cs-slide.on img { animation: none; } }
+
 /* ---------- Loading screen ---------- */
 .loading { position: absolute; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; overflow: hidden;
   background: #8fd45a url("../assets/bg/loading.jpg") center / cover no-repeat; transition: opacity .5s ease; }

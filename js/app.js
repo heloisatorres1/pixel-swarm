@@ -531,6 +531,49 @@
   $('name-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveName(); });
   $('name-input').addEventListener('blur', () => setTimeout(saveName, 150));
 
+  // =====================================================================
+  //  STORY CUTSCENE (first launch only, after the age gate) — edit texts / images here
+  // =====================================================================
+  // from/to = zoom at the start/end of the slow camera move, focus = the point the camera moves toward
+  const STORY = [
+    { img: 'art-tree', title: 'The Enchanted Art-Tree', from: 1, to: 1.12, focus: '50% 35%',
+      text: 'Deep within an enchanted forest stands the Art-Tree, a magical living canvas where breathtaking pixel-art masterpieces blossom.' },
+    { img: 'pixel-magic', title: 'The Magic of the Pixels', from: 1, to: 1.14, focus: '50% 55%',
+      text: 'Its colorful pixel blocks are full of magic, and the little bugs soon discover amazing powers of their own!' },
+    { img: 'living-canvas', title: 'A Living Canvas', from: 1, to: 1.12, focus: '55% 30%',
+      text: 'Working together, the colony brings every pixel masterpiece to life, one color at a time.' },
+    { img: 'discovery', title: "The Bugs' Discovery", from: 1, to: 1.12, focus: '50% 25%',
+      text: 'Curious and brave, the bugs explore the forest, collecting magical resources along the way.' },
+    { img: 'discovery', title: 'The Nectar Harvest', from: 1.45, to: 1.6, focus: '38% 80%',
+      text: "Now it's your turn: guide the colony as it harvests magical nectar to grow and thrive!" },
+  ];
+  let story = null; // { i, done }
+  function startStory(onDone) {
+    story = { i: -1, done: onDone };
+    $('cs-slides').innerHTML = STORY.map((s) => `<div class="cs-slide"><img src="assets/story/${s.img}.jpg" alt=""
+      style="--from:${s.from};--to:${s.to};--focus:${s.focus}"></div>`).join('');
+    $('cutscene').hidden = false;
+    nextStory();
+  }
+  function nextStory() {
+    if (!story) return;
+    story.i += 1;
+    if (story.i >= STORY.length) return endStory();
+    const s = STORY[story.i], slides = $('cs-slides').children;
+    [...slides].forEach((el, k) => el.classList.toggle('on', k === story.i));
+    $('cs-title').textContent = s.title;
+    $('cs-text').textContent = s.text;
+    $('cs-next').textContent = story.i === STORY.length - 1 ? "Let's go!" : 'Next ›';
+    $('cs-dots').innerHTML = STORY.map((_, k) => `<i class="${k === story.i ? 'on' : ''}"></i>`).join('');
+    const cap = document.querySelector('.cs-caption'); cap.classList.remove('fade'); void cap.offsetWidth; cap.classList.add('fade');
+  }
+  function endStory() {
+    const done = story && story.done;
+    story = null; state.storySeen = true; saveState();
+    $('cutscene').hidden = true; $('cs-slides').innerHTML = '';
+    if (done) done();
+  }
+
   // ---------- Age gate ----------
   let chosenAge = null;
   function chooseAge(el) {
@@ -542,8 +585,9 @@
     if (!chosenAge) return;
     state.ageGroup = chosenAge; saveState();
     closePopup(true);
-    // FTUE: brand-new players get the welcome pop-up and then the guided first level
-    if (!state.tutorialSeen && state.stats.levels === 0) openPopup('popup-welcome');
+    // FTUE: brand-new players see the story, then the welcome pop-up, then the guided first level
+    const welcome = () => { if (!state.tutorialSeen && state.stats.levels === 0) openPopup('popup-welcome'); };
+    if (!state.storySeen) startStory(welcome); else welcome();
   }
 
   // ---------- Special offer pop-up ----------
@@ -858,6 +902,45 @@
   ];
   let game = null;
 
+  // ---- reachability, shared by the game and the level generator (they must always agree) ----
+  // Bees enter from below the board and travel through open cells (up, down, left, right).
+  // Returns Map(pixelIndex -> distance from the tree) of every pixel the bees can reach right now.
+  function reachMap(cells, isOpen) {
+    const H = cells.length, W = cells[0].length, dist = new Int32Array(W * H).fill(-1), q = [], best = new Map();
+    const touch = (k, d) => { if (!best.has(k) || best.get(k) > d) best.set(k, d); };
+    for (let x = 0; x < W; x++) {
+      const k = (H - 1) * W + x;
+      if (isOpen(x, H - 1)) { dist[k] = 1; q.push(k); } else touch(k, 1);
+    }
+    for (let qi = 0; qi < q.length; qi++) {
+      const k = q[qi], x = k % W, y = (k / W) | 0, d = dist[k];
+      const nb = [x < W - 1 ? k + 1 : -1, x > 0 ? k - 1 : -1, y > 0 ? k - W : -1, y < H - 1 ? k + W : -1];
+      for (const nk of nb) {
+        if (nk < 0) continue;
+        if (isOpen(nk % W, (nk / W) | 0)) { if (dist[nk] < 0) { dist[nk] = d + 1; q.push(nk); } }
+        else touch(nk, d + 1);
+      }
+    }
+    return best;
+  }
+  // the reachable pixel of a color closest to the tree (ties: lowest row, then nearest the centre)
+  function pickTarget(cells, isOpen, color) {
+    const W = cells[0].length, mid = (W - 1) / 2;
+    let bestK = -1, bd = 1e9, by = -1, bx = 1e9;
+    for (const [k, d] of reachMap(cells, isOpen)) {
+      const x = k % W, y = (k / W) | 0;
+      if (cells[y][x] !== color) continue;
+      const cx = Math.abs(x - mid);
+      if (d < bd || (d === bd && (y > by || (y === by && cx < bx)))) { bd = d; by = y; bx = cx; bestK = k; }
+    }
+    return bestK < 0 ? null : [bestK % W, (bestK / W) | 0];
+  }
+  function reachableColors(cells, isOpen) {
+    const W = cells[0].length, set = new Set();
+    for (const k of reachMap(cells, isOpen).keys()) set.add(cells[(k / W) | 0][k % W]);
+    return set;
+  }
+
   // simple seeded random so a level always builds the same way
   function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
   function buildLevel(theme, diff, index) {
@@ -872,13 +955,12 @@
     // Dealing these blocks across the columns in order means a careful player can always finish the level.
     const W = grid[0].length, H = grid.length, sim = cells.map((r) => r.slice());
     const mid = (W - 1) / 2, xs = [...Array(W).keys()].sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid));
-    const simExposed = (x, y) => { for (let yy = y + 1; yy < H; yy++) if (sim[yy][x]) return false; return true; };
-    const simTarget = (color) => { for (let y = H - 1; y >= 0; y--) for (const x of xs) if (sim[y][x] === color && simExposed(x, y)) return [x, y]; return null; };
+    const simOpen = (x, y) => !sim[y][x];
+    const simTarget = (color) => pickTarget(sim, simOpen, color); // same rule as the bees in the game
     let left = Object.values(counts).reduce((a, b) => a + b, 0);
     const blocks = [];
     while (left > 0) {
-      const exposedColors = new Set();
-      for (const x of xs) for (let y = H - 1; y >= 0; y--) if (sim[y][x]) { exposedColors.add(sim[y][x]); break; }
+      const exposedColors = reachableColors(sim, simOpen);
       const target = Math.round(cfg.blockMin + rand() * (cfg.blockMax - cfg.blockMin));
       // prefer colors that can make a full-size block right now (avoids tiny 1–2 pixel blocks)
       const reach = (color) => {
@@ -1186,23 +1268,13 @@
     if (tutorialTap) nextCoachStep();
   }
 
-  // ---- bees: find an exposed pixel (nothing left below it in its column) ----
-  // a pixel a bee is already flying to counts as cleared (same rule as the level generator,
-  // so the bees eat exactly the pixels the solution expects)
-  function exposed(g, x, y) {
-    const W = g.cells[0].length;
-    for (let yy = y + 1; yy < g.cells.length; yy++) if (g.cells[yy][x] && !g.reserved.has(yy * W + x)) return false;
-    return true;
-  }
+  // ---- bees: which pixel can be eaten? (genre rule, like Pixel Hunt / Colony Flow) ----
+  // A pixel is a target when it touches the bottom edge or touches a cleared space connected to the bottom
+  // (through columns AND rows). A pixel a bee is already flying to counts as cleared, same as in the level generator.
   function findTarget(g, color) {
-    const W = g.cells[0].length, mid = (W - 1) / 2;
-    const xs = [...Array(W).keys()].sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid));
-    for (let y = g.cells.length - 1; y >= 0; y--) {
-      for (const x of xs) {
-        if (g.cells[y][x] === color && !g.reserved.has(y * W + x) && exposed(g, x, y)) return { x, y, key: y * W + x };
-      }
-    }
-    return null;
+    const W = g.cells[0].length;
+    const t = pickTarget(g.cells, (x, y) => !g.cells[y][x] || g.reserved.has(y * W + x), color);
+    return t ? { x: t[0], y: t[1], key: t[1] * W + t[0] } : null;
   }
   function beeSprite() { return { bee: 'bee_fly', ladybug: 'ladybug_fly' }[state.creature] || state.creature; }
   function launchBee(g, slotBlock, t) {
@@ -1475,6 +1547,39 @@
     const tiny = g.cols.length && Object.values(counts).some((n) => n < 1);
     return g.remaining === 0 && !tiny ? 'ok' : `${g.remaining} pixel(s) left at the end`;
   }
+  // "Careless player" simulation (instant): always taps the first front block that can eat right now.
+  // Research target (pixel-hunt design notes): careless win rate ≤ 85% on Medium, ≤ 55% on Hard.
+  function carelessWins(theme, diff, index) {
+    const g = buildLevel(theme, diff, index), open = (x, y) => !g.cells[y][x];
+    const slots = Array(g.cfg.slots).fill(null);
+    for (let guard = 0; guard < 20000; guard++) {
+      if (g.remaining <= 0) return true;
+      // fill free slots
+      while (slots.includes(null)) {
+        let c = g.cols.findIndex((col) => col[0] && !col[0].frozen && pickTarget(g.cells, open, col[0].color));
+        if (c < 0 && slots.every((s) => !s)) c = g.cols.findIndex((col) => col[0] && !col[0].frozen);
+        if (c < 0 && slots.every((s) => !s)) c = g.cols.findIndex((col) => col[0]);
+        if (c < 0) break;
+        const b = g.cols[c].shift(); b.frozen = false;
+        [c - 1, c + 1].forEach((k) => { const n = g.cols[k] && g.cols[k][0]; if (n && n.frozen) n.frozen = false; });
+        slots[slots.indexOf(null)] = { color: b.color, amount: b.amount };
+      }
+      // every slot eats one round
+      let progress = false;
+      slots.forEach((s, i) => {
+        if (!s) return;
+        for (let k = 0; k < g.cfg.beesPerLaunch && s.amount > 0; k++) {
+          const t = pickTarget(g.cells, open, s.color);
+          if (!t) break;
+          g.cells[t[1]][t[0]] = null; g.remaining -= 1; s.amount -= 1; progress = true;
+        }
+        if (s.amount <= 0) slots[i] = null;
+      });
+      if (!progress && !slots.includes(null)) return false; // out of slots
+      if (!progress && g.cols.every((c) => !c.length)) return g.remaining <= 0;
+    }
+    return false;
+  }
   function verifyAll() {
     const rows = [];
     let ok = 0, total = 0;
@@ -1491,7 +1596,13 @@
     let blocks = 0, tiny = 0;
     D.THEMES.forEach((t) => D.DIFFICULTIES.forEach((d) => { for (let i = 0; i < D.LEVELS_PER_DIFFICULTY; i++) {
       buildLevel(t.id, d, i).cols.flat().forEach((b) => { blocks += 1; if (b.amount < 4) tiny += 1; }); } }));
-    return `LEVEL CHECK: ${ok}/${total} levels can be completed\nTiny blocks (< 4 pixels): ${tiny} of ${blocks}\n` + rows.join('\n');
+    const careless = D.DIFFICULTIES.map((d) => {
+      let w = 0, n = 0;
+      D.THEMES.forEach((t) => { for (let i = 0; i < D.LEVELS_PER_DIFFICULTY; i++) { n += 1; if (carelessWins(t.id, d, i)) w += 1; } });
+      return `${d} ${Math.round((w / n) * 100)}% (${w}/${n})`;
+    }).join(' · ');
+    return `LEVEL CHECK: ${ok}/${total} levels can be completed\nTiny blocks (< 4 pixels): ${tiny} of ${blocks}\n` +
+      `Careless-player win rate: ${careless}  (targets: medium ≤ 85%, hard ≤ 55%)\n` + rows.join('\n');
   }
 
   // ---------- Test bot (used by #autoplay / #solve_* and the debug "Auto-solve") ----------
@@ -1569,6 +1680,7 @@
     p_booster: () => showUnlock('booster', BOOSTERS[1]),
     p_feature: () => showUnlock('feature', FEATURES.frozen),
     p_tutorial: () => { if (inGame()) startTutorial(); },
+    p_story: () => startStory(() => {}),
     p_ad: () => showAd(() => toast('Ad finished')),
     reset: () => {
       if (!window.confirm('Delete ALL saved data (currencies, progress, skins, settings)?')) return;
@@ -1626,6 +1738,9 @@
       coach.i = n - 1; coach.waiting = false; showCoachStep();
     }])),
     welcome: () => openPopup('popup-welcome'),
+    story: () => startStory(() => toast('Story finished')),
+    'story-next': () => nextStory(),
+    'story-skip': () => endStory(),
     'welcome-play': () => { closePopup(true); startLevel('flowers', 'easy', 0); },
     howto: () => openPopup('popup-howto'),
     // dev: a simple bot plays the current level (taps a block whose color can reach a pixel)
@@ -1644,8 +1759,7 @@
     // dev: report of one level (flowers medium level 9 = index 3)
     level_report: () => {
       const g = buildLevel('flowers', 'medium', 3), H = g.cells.length, W = g.cells[0].length;
-      const exposedColors = new Set();
-      for (let x = 0; x < W; x++) for (let y = H - 1; y >= 0; y--) if (g.cells[y][x]) { exposedColors.add(g.cells[y][x]); break; }
+      const exposedColors = reachableColors(g.cells, (x, y) => !g.cells[y][x]);
       const name = (c) => `${c}(${D.PALETTE[c]})`;
       const lines = [`slots: ${g.slots.length} (+${D.AD_SLOTS} ad)`, `colors reachable at start: ${[...exposedColors].map(name).join(', ')}`,
         `columns (front first):`, ...g.cols.map((col, i) => `  col ${i + 1}: ${col.map((b) => `${b.color}${b.amount}${b.mystery ? '?' : ''}${b.frozen ? '*' : ''}`).join(' ')}`),
