@@ -1,0 +1,30 @@
+{
+  "name": "pixel-swarm",
+  "version": "1.0.0",
+  "description": "Pixel Swarm — a cute casual pixel-art puzzle game: send bugs out of the Art-Tree to eat pixel pictures color by color.",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "build": "node scripts/build.mjs",
+    "build:debug": "node scripts/build.mjs --debug",
+    "preview": "node scripts/dev-server.mjs dist",
+    "package:itch": "node scripts/build.mjs && node scripts/package-itch.mjs",
+    "android:sync": "node scripts/build.mjs && npx cap sync android",
+    "android:open": "npx cap open android"
+  },
+  "keywords": [
+    "html5",
+    "game",
+    "puzzle",
+    "pixel-art",
+    "capacitor"
+  ],
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
+  }
+}

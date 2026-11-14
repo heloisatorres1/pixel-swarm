@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#7fb43c">
+  <title>Pixel Swarm</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app" class="phone">
+
+    <!-- ============ LOADING SCREEN (downloads/screens/00_loading.png) ============ -->
+    <div class="loading" id="loading">
+      <img class="ld-logo" src="assets/sprites/logo.png" alt="Pixel Swarm">
+      <div class="ld-crew">
+        <img class="ld-bug butterfly" src="assets/sprites/butterfly.png" alt="">
+        <img class="ld-bug ant" src="assets/sprites/ant.png" alt="">
+        <div class="ld-stump"></div>
+        <img class="ld-bug ladybug" src="assets/sprites/ladybug.png" alt="">
+        <img class="ld-bug bee" src="assets/sprites/bee.png" alt="">
+        <img class="ld-bug beetle" src="assets/sprites/beetle.png" alt="">
+      </div>
+      <div class="ld-text">Loading...</div>
+      <div class="ld-bar" role="progressbar" aria-label="Loading"><i id="ld-fill"></i></div>
+    </div>
+
+    <!-- ============ MAIN MENU ============ -->
+    <section id="screen-menu" class="screen active">
+
+      <!-- Background: sunny forest + the Art-Tree (assets/bg/menu.jpg) -->
+      <div class="scene" id="menu-scene" aria-hidden="true">
+        <div id="swarm" class="swarm"></div>
+      </div>
+
+      <!-- Creature standing on the tree's mossy platform (positioned by js/app.js) -->
+      <div class="mascot" id="ui-mascot-wrap">
+        <img id="ui-mascot" src="assets/sprites/bee.png" alt="Bee">
+        <div class="mascot-shadow"></div>
+      </div>
+
+      <!-- Top bar -->
+      <header class="topbar">
+        <button class="profile" data-action="profile" aria-label="Profile">
+          <span class="avatar"><img class="ui-avatar" src="assets/sprites/bee.png" alt=""></span>
+          <span class="xp">
+            <span class="xp-level ui-player-level">1</span>
+            <span class="xp-bar"><span class="xp-fill ui-xp-fill"></span></span>
+          </span>
+        </button>
+
+        <div class="currencies">
+          <button class="pill" data-action="store" aria-label="Gems">
+            <img src="assets/sprites/gem.png" alt=""><span class="ui-gems">20</span><img class="plus" src="assets/sprites/btn_plus.png" alt="">
+          </button>
+          <button class="pill" data-action="store" aria-label="Coins">
+            <img src="assets/sprites/coin.png" alt=""><span class="ui-coins">100</span><img class="plus" src="assets/sprites/btn_plus.png" alt="">
+          </button>
+        </div>
+
+        <button class="wood-round" data-action="settings" aria-label="Settings">
+          <img src="assets/sprites/icon_settings.png" alt="">
+        </button>
+      </header>
+
+      <!-- Logo -->
+      <h1 class="logo"><img src="assets/sprites/logo.png" alt="Pixel Swarm"></h1>
+
+      <!-- Middle: side buttons + mascot -->
+      <div class="middle">
+        <div class="side left">
+          <button class="side-btn" data-action="collections">
+            <img src="assets/sprites/icon_collections.png" alt=""><span>Collections</span>
+          </button>
+          <button class="side-btn" data-action="activities">
+            <img src="assets/sprites/icon_activities.png" alt=""><b class="badge" id="ui-activity-badge">1</b><span>Activities</span>
+          </button>
+        </div>
+
+        <div class="mascot-space"></div>
+
+        <div class="side right">
+          <button class="side-btn" data-action="noads" id="menu-noads">
+            <img src="assets/sprites/icon_noads.png" alt=""><span>No Ads</span>
+          </button>
+          <button class="side-btn" data-action="events">
+            <img src="assets/sprites/icon_events.png" alt=""><b class="timer" id="ui-event-timer">2d 4h</b><span>Events</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Levels + Play -->
+      <div class="actions">
+        <div class="levels-wrap">
+          <button class="gbtn blue" data-action="levels"><span>Levels</span></button>
+          <span class="diff-tag" id="ui-diff-tag"><b id="ui-difficulty">Easy</b><i id="ui-theme">Flowers</i></span>
+        </div>
+        <div class="play-wrap">
+          <button class="gbtn green big" data-action="play"><span id="ui-play-label">Level 1</span></button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ============ STORE ============ -->
+    <section id="screen-store" class="screen" aria-label="Store">
+      <div class="scene blurred" aria-hidden="true"></div>
+
+      <header class="topbar">
+        <button class="profile" data-action="profile" aria-label="Profile">
+          <span class="avatar"><img class="ui-avatar" src="assets/sprites/bee.png" alt=""></span>
+          <span class="xp">
+            <span class="xp-level ui-player-level">1</span>
+            <span class="xp-bar"><span class="xp-fill ui-xp-fill"></span></span>
+          </span>
+        </button>
+        <div class="currencies">
+          <span class="pill" aria-label="Gems"><img src="assets/sprites/gem.png" alt=""><span class="ui-gems">20</span></span>
+          <span class="pill" aria-label="Coins"><img src="assets/sprites/coin.png" alt=""><span class="ui-coins">100</span></span>
+        </div>
+        <button class="close-btn static" data-action="home" aria-label="Close">X</button>
+      </header>
+
+      <div class="screen-title"><div class="ribbon inline"><h2>Store</h2></div></div>
+
+      <!-- Filled by renderStore() in js/app.js from the PRODUCTS list -->
+      <div class="store-scroll" id="store-list"></div>
+    </section>
+
+    <!-- ============ ACTIVITIES (pop-up with 2 tabs) ============ -->
+    <div class="overlay" id="popup-activities" hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="activities-title">
+        <div class="ribbon"><h2 id="activities-title">Activities</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+
+        <div class="popup-body">
+          <div class="tabs" role="tablist">
+            <button class="tab" role="tab" data-action="act-tab" data-tab="daily">Daily Rewards<b class="tab-dot" id="dot-daily"></b></button>
+            <button class="tab" role="tab" data-action="act-tab" data-tab="tasks">Tasks<b class="tab-dot" id="dot-tasks"></b></button>
+          </div>
+
+          <!-- Daily rewards: filled by renderDaily() -->
+          <div class="tab-panel" id="panel-daily">
+            <div class="days" id="daily-grid"></div>
+            <button class="gbtn green claim-btn" data-action="claim-daily" id="daily-claim"><span>Claim</span></button>
+            <div class="timer-pill">Next reward in <b class="ui-midnight">--:--:--</b></div>
+          </div>
+
+          <!-- Daily tasks: filled by renderTasks() -->
+          <div class="tab-panel" id="panel-tasks" hidden>
+            <div class="task-list" id="task-list"></div>
+            <div class="timer-pill">Resets in <b class="ui-midnight">--:--:--</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PROFILE (pop-up) ============ -->
+    <div class="overlay" id="popup-profile" hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+        <div class="ribbon"><h2 id="profile-title">Profile</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+        <div class="popup-body">
+          <div class="profile-top">
+            <div class="big-avatar"><img class="ui-avatar" src="assets/sprites/bee.png" alt=""></div>
+            <div class="profile-info">
+              <div class="name-row">
+                <span id="ui-player-name">Player</span>
+                <input id="name-input" maxlength="14" aria-label="Player name" hidden>
+                <button class="edit-btn" data-action="edit-name" aria-label="Edit name">✎</button>
+              </div>
+              <div class="lvl-text">Level <span class="ui-player-level">1</span></div>
+              <div class="bar big"><i class="ui-xp-fill"></i><span id="ui-xp-text">0/0</span></div>
+              <div class="next-reward">Next reward: <img src="assets/sprites/coin.png" alt=""> <span id="ui-level-reward">50</span></div>
+            </div>
+          </div>
+          <div class="sub-ribbon">Choose your picture</div>
+          <div class="avatars" id="avatar-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ AGE GATE (pop-up after loading, cannot be skipped) ============ -->
+    <div class="overlay" id="popup-age" data-locked hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="age-title">
+        <div class="ribbon"><h2 id="age-title">Welcome!</h2></div>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+        <div class="popup-body center">
+          <img class="popup-hero" src="assets/sprites/bee.png" alt="">
+          <p class="popup-question">How old are you?</p>
+          <div class="age-options">
+            <button class="age-btn" data-action="age" data-age="0-12">0–12</button>
+            <button class="age-btn" data-action="age" data-age="13-17">13–17</button>
+            <button class="age-btn" data-action="age" data-age="18+">18+</button>
+          </div>
+          <button class="gbtn green claim-btn" id="age-confirm" data-action="age-confirm" disabled><span>Confirm</span></button>
+          <div class="legal-links">
+            <button data-link="terms">Terms of Service</button>
+            <button data-link="privacy">Privacy Policy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SPECIAL OFFER (pop-up shown when opening the game) ============ -->
+    <div class="overlay" id="popup-offer" hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="offer-title">
+        <div class="ribbon"><h2 id="offer-title">Special Offer</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+        <div class="popup-body center">
+          <div class="timer-pill top">⏱ <b id="ui-offer-timer">23:59:59</b></div>
+          <div class="offer-hero">
+            <img class="c" src="assets/sprites/chest.png" alt="">
+            <img class="g" src="assets/sprites/gems_pile.png" alt="">
+            <img class="k" src="assets/sprites/coins_pile.png" alt="">
+            <img class="n" src="assets/sprites/icon_noads.png" alt="">
+          </div>
+          <ul class="contents" id="offer-contents"></ul>
+          <div class="old-price" id="offer-old-price">$9.99</div>
+          <button class="gbtn green claim-btn" data-action="buy-offer"><span id="offer-price">$4.99</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ NO ADS (pop-up) ============ -->
+    <div class="overlay" id="popup-noads" hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="noads-title">
+        <div class="ribbon"><h2 id="noads-title">No Ads</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+        <div class="popup-body center">
+          <div class="noads-head">
+            <img src="assets/sprites/bee.png" alt="">
+            <p>Remove all banner and video ads for a smoother experience!</p>
+          </div>
+          <button class="big-option green" data-action="buy" data-item="noAds">
+            <img src="assets/sprites/icon_noads.png" alt=""><span>No Ads<b id="noads-price">$2.99</b></span>
+          </button>
+          <button class="big-option purple" data-action="buy" data-item="noAdsBundle">
+            <img src="assets/sprites/icon_noads.png" alt=""><span>No Ads Bundle<b id="noads-bundle-price">$5.99</b><small>(+500 gems)</small></span>
+          </button>
+          <div class="legal-links"><button data-action="restore">Restore Purchases</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SKINS ============ -->
+    <section id="screen-skins" class="screen" aria-label="Skins">
+      <div class="scene blurred" aria-hidden="true"></div>
+      <header class="topbar">
+        <button class="profile" data-action="profile" aria-label="Profile">
+          <span class="avatar"><img class="ui-avatar" src="assets/sprites/bee.png" alt=""></span>
+          <span class="xp"><span class="xp-level ui-player-level">1</span><span class="xp-bar"><span class="xp-fill ui-xp-fill"></span></span></span>
+        </button>
+        <div class="currencies">
+          <button class="pill" data-action="store" aria-label="Gems"><img src="assets/sprites/gem.png" alt=""><span class="ui-gems">20</span><img class="plus" src="assets/sprites/btn_plus.png" alt=""></button>
+        </div>
+        <button class="close-btn static" data-action="home" aria-label="Close">X</button>
+      </header>
+      <div class="screen-title"><div class="ribbon inline"><h2>Skins</h2></div></div>
+
+      <div class="frame-panel">
+        <div class="skin-stage">
+          <button class="arrow-btn left" data-action="skin-prev" aria-label="Previous">‹</button>
+          <div class="stage-art"><img id="skin-preview" src="assets/sprites/bee.png" alt=""><div class="stump"></div></div>
+          <button class="arrow-btn right" data-action="skin-next" aria-label="Next">›</button>
+          <div class="skin-info">
+            <h3><span id="skin-name">Bee</span><b class="check" id="skin-inuse"></b></h3>
+            <p id="skin-desc"></p>
+          </div>
+        </div>
+        <div class="skin-grid" id="skin-grid"></div>
+      </div>
+    </section>
+
+    <!-- ============ COLLECTIONS (Gallery / Achievements / Bugs) ============ -->
+    <section id="screen-collections" class="screen" aria-label="Collections">
+      <div class="scene blurred" aria-hidden="true"></div>
+      <div class="screen-title top"><div class="ribbon inline"><h2>Collections</h2></div>
+        <button class="close-btn" data-action="home" aria-label="Close">X</button></div>
+      <div class="frame-panel">
+        <div class="tabs three" role="tablist">
+          <button class="tab" data-action="col-tab" data-tab="gallery">Gallery</button>
+          <button class="tab" data-action="col-tab" data-tab="achievements">Achievements</button>
+          <button class="tab" data-action="col-tab" data-tab="bugs">Bugs</button>
+        </div>
+        <div class="counter-ribbon" id="col-counter">Completed 0/10</div>
+        <div class="panel-inner"><div id="col-grid"></div></div>
+        <div class="pager">
+          <button class="arrow-btn" data-action="col-page" data-dir="-1" aria-label="Previous page">‹</button>
+          <span class="page-pill" id="col-page">1/1</span>
+          <button class="arrow-btn" data-action="col-page" data-dir="1" aria-label="Next page">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ EVENTS ============ -->
+    <section id="screen-events" class="screen" aria-label="Events">
+      <div class="scene blurred" aria-hidden="true"></div>
+      <div class="screen-title top"><div class="ribbon inline"><h2>Events</h2></div>
+        <button class="close-btn" data-action="home" aria-label="Close">X</button></div>
+      <div class="frame-panel event-panel">
+        <!-- banner art (assets/bg/event_halloween.jpg) with a live countdown on top -->
+        <div class="ev-banner"><span class="ev-timer"><i class="clock"></i>Ends in <b id="ui-event-ends">3d 6h</b></span></div>
+        <div class="panel-inner ev-scroll">
+          <div class="ev-info"><img src="assets/sprites/pumpkin.png" alt=""><p>Play special levels, collect pumpkins and earn exclusive rewards!</p></div>
+          <!-- 12 event levels on a winding path (filled by renderEvents) -->
+          <div class="ev-map" id="event-map"></div>
+          <div class="sub-ribbon small">Event Rewards</div>
+          <div class="ev-rewards-box">
+            <div class="ev-progress"><img src="assets/sprites/pumpkin.png" alt=""><div class="bar big"><i id="ev-bar"></i><span id="ev-count">0/120</span></div></div>
+            <div class="ev-rewards" id="event-rewards"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LEVEL THEMES ============ -->
+    <section id="screen-themes" class="screen" aria-label="Level Themes">
+      <div class="scene blurred" aria-hidden="true"></div>
+      <div class="screen-title top"><div class="ribbon inline"><h2>Level Themes</h2></div>
+        <button class="close-btn" data-action="home" aria-label="Close">X</button></div>
+      <div class="frame-panel">
+        <div class="bee-says"><img src="assets/sprites/bee_fly.png" alt=""><p>Choose a theme and a difficulty to start playing!</p></div>
+        <div class="panel-inner"><div class="theme-list" id="theme-list"></div></div>
+      </div>
+    </section>
+
+    <!-- ============ LEVELS OF ONE THEME ============ -->
+    <section id="screen-theme" class="screen" aria-label="Levels">
+      <div class="scene blurred" aria-hidden="true"></div>
+      <div class="screen-title top"><div class="ribbon inline"><h2>Levels</h2></div>
+        <button class="close-btn" data-action="home" aria-label="Close">X</button></div>
+      <div class="frame-panel">
+        <!-- theme tabs (Flowers, Fruits, Animals, Sweets, Ocean) -->
+        <div class="theme-tabs">
+          <button class="arrow-btn sm" data-action="theme-step" data-dir="-1" aria-label="Previous theme">‹</button>
+          <div class="tt-list" id="theme-tabs"></div>
+          <button class="arrow-btn sm" data-action="theme-step" data-dir="1" aria-label="Next theme">›</button>
+        </div>
+        <!-- theme banner -->
+        <div class="theme-banner">
+          <img class="tb-bee" src="assets/sprites/bee.png" alt="">
+          <div class="tb-mid"><h3 id="th-name">Flowers</h3><p id="th-desc"></p></div>
+          <img class="tb-pic" id="th-pic" alt="">
+        </div>
+        <div class="panel-inner"><div id="diff-sections"></div></div>
+      </div>
+    </section>
+
+    <!-- ============ GAMEPLAY (level screen) ============ -->
+    <section id="screen-game" class="screen" aria-label="Level">
+      <div class="scene game-bg" aria-hidden="true"></div>
+      <header class="game-top">
+        <div class="g-left">
+          <button class="wood-round" data-action="settings" aria-label="Settings"><img src="assets/sprites/icon_settings.png" alt=""></button>
+          <button class="wood-round small" data-action="pause" aria-label="Menu"><span class="pause-ico"></span></button>
+        </div>
+        <div class="level-plate"><b id="g-level">Level 1</b><small id="g-sub">Flowers • Easy</small></div>
+        <div class="g-right">
+          <span class="pill" aria-label="Coins"><img src="assets/sprites/coin.png" alt=""><span class="ui-coins">100</span></span>
+          <button class="speed-btn" data-action="speed" aria-label="Game speed" aria-pressed="false"><img src="assets/sprites/icon_speed.png" alt=""><b id="g-speed-label">1x</b><small id="g-speed-timer" hidden></small></button>
+        </div>
+      </header>
+      <div class="board-wrap">
+        <div class="board"><canvas id="g-board"></canvas></div>
+        <!-- shown while the Wind booster waits for the player to tap a color -->
+        <img class="board-tap" id="g-board-tap" src="assets/sprites/booster_pick.png" alt="" hidden>
+      </div>
+      <div class="hole-zone" id="g-hole"></div>
+      <!-- locked slots that open with a video ad (doc: "ADs - to unlock slots") -->
+      <div class="ad-slots" id="g-adslots"></div>
+      <div class="slots" id="g-slots"></div>
+      <div class="queue" id="g-queue"></div>
+      <div class="booster-bar" id="g-boosters"></div>
+      <div class="ad-banner" id="g-ad">AD placeholder</div>
+      <div class="bee-layer" id="g-bees" aria-hidden="true"></div>
+      <div class="mode-hint" id="g-hint" hidden></div>
+    </section>
+
+    <!-- ============ PAUSE (in-game menu) ============ -->
+    <div class="overlay" id="popup-pause" hidden>
+      <div class="popup small" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <div class="ribbon"><h2 id="pause-title">Paused</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <div class="popup-body center">
+          <div class="wood-list wide">
+            <button class="gbtn green claim-btn" data-close><span>Resume</span></button>
+            <button class="gbtn blue claim-btn" data-action="restart"><span>Restart</span></button>
+            <button class="wood-btn" data-action="speed-store">Speed Store</button>
+            <button class="wood-btn" data-action="quit">Exit to Menu</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ LEVEL COMPLETE ============ -->
+    <div class="overlay rays" id="popup-complete" hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="complete-title">
+        <div class="win-stars" id="win-stars"></div>
+        <div class="ribbon red"><h2 id="complete-title">Level Complete!</h2></div>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+        <div class="popup-body center">
+          <div class="win-frame"><img id="win-pic" alt=""></div>
+          <p class="win-name" id="win-name">Fruits • Cherries</p>
+          <div class="win-rewards">
+            <div class="win-reward"><img src="assets/sprites/coin.png" alt=""><b id="win-coins">+30</b></div>
+            <div class="win-reward" id="win-pumpkins" hidden><img src="assets/sprites/pumpkin.png" alt=""><b id="win-pk">+10</b></div>
+          </div>
+          <img class="win-bee" id="win-bee" src="assets/sprites/bee.png" alt="">
+          <button class="gbtn purple claim-btn has-icon" data-action="claim-x2"><img src="assets/sprites/icon_video_ad.png" alt=""><span>Claim x2</span></button>
+          <button class="gbtn green claim-btn" data-action="win-continue"><span>Continue</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ NEW BOOSTER / NEW FEATURE (shared pop-up) ============ -->
+    <div class="overlay rays" id="popup-unlock" hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="unlock-title">
+        <div class="ribbon"><h2 id="unlock-title">New Booster!</h2></div>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+        <div class="popup-body center">
+          <div class="unlock-glow"><img id="unlock-icon" src="assets/sprites/booster_shuffle.png" alt=""></div>
+          <h3 class="unlock-name" id="unlock-name">Shuffle</h3>
+          <p class="unlock-desc" id="unlock-desc">Changes the colors of the blocks in line.</p>
+          <button class="gbtn green claim-btn" data-close><span id="unlock-btn">Claim</span></button>
+          <p class="unlock-note" id="unlock-note">You got 2 for free</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ OUT OF SLOTS (level failed) ============ -->
+    <div class="overlay" id="popup-fail" data-locked hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="fail-title">
+        <div class="ribbon"><h2 id="fail-title">Out of Slots!</h2></div>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+        <div class="popup-body center">
+          <img class="popup-hero sad" src="assets/sprites/bee.png" alt="">
+          <p class="popup-question">No more free slots.</p>
+          <button class="gbtn green claim-btn has-icon" data-action="fail-addslot"><img src="assets/sprites/icon_video_ad.png" alt=""><span>Add Slot</span></button>
+          <button class="gbtn blue claim-btn" data-action="restart"><span>Try Again</span></button>
+          <div class="legal-links"><button data-action="quit">Give Up</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ TUTORIAL (first level) ============ -->
+    <div class="tutorial" id="tutorial" hidden>
+      <div class="spot" id="tut-spot"></div>
+      <img class="tut-hand" id="tut-hand" src="assets/sprites/booster_pick.png" alt="">
+      <div class="tut-bubble" id="tut-bubble"><img src="assets/sprites/bee.png" alt=""><p id="tut-text">Tap a block to send it to a slot! The bees will eat all pixels of that color.</p></div>
+    </div>
+
+    <!-- Bottom navigation (shared by the main screens) -->
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="nav-btn" data-action="store" data-screen="store"><img src="assets/sprites/icon_store.png" alt=""><span>Store</span></button>
+      <button class="nav-btn active" data-action="home" data-screen="menu"><img src="assets/sprites/icon_home.png" alt=""><span>Home</span></button>
+      <button class="nav-btn" data-action="skins" data-screen="skins"><img src="assets/sprites/icon_skins.png" alt=""><span>Skins</span></button>
+    </nav>
+
+    <!-- Fake video ad (placeholder until a real ad network is added) -->
+    <div class="ad-overlay" id="ad-overlay" hidden>
+      <div class="ad-box">AD placeholder</div>
+      <p class="ad-count">Reward in <b id="ad-count">3</b>…</p>
+    </div>
+
+    <!-- ============ SETTINGS (pop-up) ============ -->
+    <div class="overlay" id="popup-settings" hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="ribbon"><h2 id="settings-title">Settings</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+
+        <div class="popup-body">
+          <div class="toggles">
+            <button class="toggle" data-toggle="music" aria-pressed="true">
+              <span class="toggle-icon"><img src="assets/sprites/icon_music.png" alt=""><b class="check"></b></span>
+              <span class="toggle-label">Music</span>
+            </button>
+            <button class="toggle" data-toggle="sounds" aria-pressed="true">
+              <span class="toggle-icon"><img src="assets/sprites/icon_sfx.png" alt=""><b class="check"></b></span>
+              <span class="toggle-label">Sounds</span>
+            </button>
+            <button class="toggle" data-toggle="haptics" aria-pressed="true">
+              <span class="toggle-icon"><img src="assets/sprites/icon_haptics.png" alt=""><b class="check"></b></span>
+              <span class="toggle-label">Haptics</span>
+            </button>
+            <button class="toggle" data-toggle="notifications" aria-pressed="true">
+              <span class="toggle-icon"><img src="assets/sprites/icon_notifications.png" alt=""><b class="check"></b></span>
+              <span class="toggle-label">Notifications</span>
+            </button>
+          </div>
+
+          <div class="wood-list">
+            <button class="wood-btn" data-link="privacy">Privacy Policy</button>
+            <button class="wood-btn" data-link="terms">Terms of Service</button>
+            <button class="wood-btn" data-link="feedback">Feedback</button>
+          </div>
+
+          <div class="info-box">
+            <div class="pid">
+              <span>Player ID: <span id="ui-player-id">----</span></span>
+              <button class="gbtn green small" data-action="copy-id"><span>Copy</span></button>
+            </div>
+            <div class="version">Version <span id="ui-version">1.0.0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SPEED STORE (pop-up) ============ -->
+    <div class="overlay" id="popup-speed" hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="speed-title">
+        <div class="ribbon"><h2 id="speed-title">Speed Store</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+        <div class="popup-body">
+          <div class="sp-banner">
+            <img class="sp-bee" src="assets/sprites/bee.png" alt="">
+            <img class="sp-ff" src="assets/sprites/icon_speed.png" alt="">
+            <p>Speed up your progress!<small>Choose a time boost or a higher speed!</small></p>
+          </div>
+          <div class="sp-status" id="sp-status"></div>
+          <div class="sp-section">
+            <div class="sp-head"><span class="sp-watch"></span>Speed Boost (Time)</div>
+            <p class="sp-sub">Play at 2x speed for a limited time!</p>
+            <div class="sp-grid four" id="sp-boosts"></div>
+          </div>
+          <div class="sp-section">
+            <div class="sp-head"><img src="assets/sprites/gem.png" alt="">Higher Speed (Permanent)</div>
+            <p class="sp-sub">Unlock a higher game speed and keep it forever!</p>
+            <div class="sp-grid three" id="sp-tiers"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ DEBUG (cheats for testing; turn off with DEBUG = false in js/app.js) ============ -->
+    <button class="dbg-btn" id="dbg-btn" data-action="debug" hidden>DBG</button>
+    <div class="overlay" id="popup-debug" hidden>
+      <div class="popup small dbg" role="dialog" aria-modal="true" aria-labelledby="dbg-title">
+        <div class="ribbon"><h2 id="dbg-title">Debug</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <div class="popup-body">
+          <h4>Level (while playing)</h4>
+          <div class="dbg-grid">
+            <button data-action="dbg" data-cmd="win">Win level</button>
+            <button data-action="dbg" data-cmd="lose">Lose level</button>
+            <button data-action="dbg" data-cmd="solve">Auto-solve</button>
+            <button data-action="dbg" data-cmd="speed">Speed 5x</button>
+          </div>
+          <h4>Currencies &amp; items</h4>
+          <div class="dbg-grid">
+            <button data-action="dbg" data-cmd="coins">+1,000 coins</button>
+            <button data-action="dbg" data-cmd="gems">+100 gems</button>
+            <button data-action="dbg" data-cmd="zero">Coins/gems = 0</button>
+            <button data-action="dbg" data-cmd="boosters">Unlock boosters +5</button>
+            <button data-action="dbg" data-cmd="skins">Unlock all skins</button>
+            <button data-action="dbg" data-cmd="noads">Toggle No Ads</button>
+            <button data-action="dbg" data-cmd="boost">+30 min speed boost</button>
+            <button data-action="dbg" data-cmd="speed8">Unlock 8x speed</button>
+          </div>
+          <h4>Progress</h4>
+          <div class="dbg-grid">
+            <button data-action="dbg" data-cmd="levels">Unlock all levels</button>
+            <button data-action="dbg" data-cmd="theme">Finish this theme's Easy</button>
+            <button data-action="dbg" data-cmd="levelup">Player level +1</button>
+            <button data-action="dbg" data-cmd="xp">Player level 20</button>
+            <button data-action="dbg" data-cmd="progress0">Reset level progress</button>
+          </div>
+          <h4>Activities &amp; events</h4>
+          <div class="dbg-grid">
+            <button data-action="dbg" data-cmd="daily">New daily reward</button>
+            <button data-action="dbg" data-cmd="tasks">Complete daily tasks</button>
+            <button data-action="dbg" data-cmd="event">Win 3 event levels</button>
+            <button data-action="dbg" data-cmd="pumpkins">+20 pumpkins</button>
+          </div>
+          <h4>Show pop-ups</h4>
+          <div class="dbg-grid">
+            <button data-action="dbg" data-cmd="p_age">Age gate</button>
+            <button data-action="dbg" data-cmd="p_offer">Special offer</button>
+            <button data-action="dbg" data-cmd="p_booster">New booster</button>
+            <button data-action="dbg" data-cmd="p_feature">New feature</button>
+            <button data-action="dbg" data-cmd="p_tutorial">Tutorial</button>
+            <button data-action="dbg" data-cmd="p_ad">Video ad</button>
+          </div>
+          <h4>Danger</h4>
+          <div class="dbg-grid">
+            <button class="red" data-action="dbg" data-cmd="reset">Reset ALL data</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

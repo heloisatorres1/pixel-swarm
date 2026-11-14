@@ -1,0 +1,13 @@
+# dependencies / build output
+node_modules/
+dist/
+release/
+
+# design sources (large ChatGPT mockups & raw images) — kept locally, not in the repo
+downloads/
+
+# editor / OS
+.vscode/
+.DS_Store
+Thumbs.db
+*.log

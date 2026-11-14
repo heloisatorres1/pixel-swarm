@@ -1,0 +1,6 @@
+# consistent line endings across Windows / GitHub
+* text=auto
+gradlew text eol=lf
+*.png binary
+*.jpg binary
+*.ttf binary
