@@ -20,14 +20,18 @@ window.PSRender = (function () {
 
   async function init(hostEl, textureUrls) {
     host = hostEl;
-    app = new PIXI.Application();
-    await app.init({ backgroundAlpha: 0, resizeTo: hostEl, resolution: window.devicePixelRatio || 1, autoDensity: true, antialias: true });
+    const a = new PIXI.Application();
+    // some devices without WebGL never finish starting — give up after 5 s and use the 2D-canvas fallback
+    const timeout = new Promise((_, no) => setTimeout(() => no(new Error('PixiJS init timeout')), 5000));
+    await Promise.race([a.init({ backgroundAlpha: 0, resizeTo: hostEl, resolution: window.devicePixelRatio || 1, autoDensity: true,
+      antialias: true, preference: 'webgl' }), timeout]);
+    app = a; // only marked ready once it really works
     app.canvas.className = 'pixi-layer';
     hostEl.appendChild(app.canvas);
     boardC = new PIXI.Container(); beeLayer = new PIXI.Container(); fxLayer = new PIXI.Container();
     app.stage.addChild(boardC, beeLayer, fxLayer);
     pixelTex = makePixelTexture();
-    await PIXI.Assets.load(textureUrls);
+    await Promise.race([PIXI.Assets.load(textureUrls), new Promise((ok) => setTimeout(ok, 8000))]);
     app.ticker.add((tk) => stepFx(tk.deltaMS));
     document.body.classList.add('pixi-on'); // CSS hides the HTML fallback board
   }

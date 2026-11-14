@@ -546,14 +546,26 @@
       text: 'Working together, the colony brings every pixel masterpiece to life, one color at a time.' },
     { img: 'discovery', title: "The Bugs' Discovery", from: 1, to: 1.12, focus: '50% 25%',
       text: 'Curious and brave, the bugs explore the forest, collecting magical resources along the way.' },
-    { img: 'discovery', title: 'The Nectar Harvest', from: 1.45, to: 1.6, focus: '38% 80%',
+    // layered scene: background + animated bugs, nectar and sparkles (assets/story/nectar/)
+    { img: 'nectar/bg', title: 'The Nectar Harvest', from: 1, to: 1.06, focus: '50% 40%',
+      layers: [
+        // [sprite, left %, top %, width %, css animation class, delay s]
+        ['sparkle', 70, 5, 7, 'twinkle', 0], ['sparkle', 8, 17, 6, 'twinkle', 0.8], ['sparkle', 46, 40, 5, 'twinkle', 1.5],
+        ['sparkle', 22, 4, 5, 'twinkle', 2.1], ['sparkle', 86, 30, 6, 'twinkle', 1.1],
+        ['butterfly', 6, 22, 26, 'flutter', 0.5], ['ant', 57, 59, 18, 'walk', 0.9],
+        ['bee', 32, 5, 48, 'hover', 0.2], ['ladybug', -4, 49, 62, 'walk', 1.2],
+        ['drop', 36, 47, 7, 'rise', 2.0], ['drop', 46, 49, 5, 'rise', 2.9],
+      ],
       text: "Now it's your turn: guide the colony as it harvests magical nectar to grow and thrive!" },
   ];
   let story = null; // { i, done }
+  const storyImg = (img) => `assets/story/${img}.jpg`;
   function startStory(onDone) {
     story = { i: -1, done: onDone };
-    $('cs-slides').innerHTML = STORY.map((s) => `<div class="cs-slide"><img src="assets/story/${s.img}.jpg" alt=""
-      style="--from:${s.from};--to:${s.to};--focus:${s.focus}"></div>`).join('');
+    $('cs-slides').innerHTML = STORY.map((s) => `<div class="cs-slide"><img src="${storyImg(s.img)}" alt=""
+      style="--from:${s.from};--to:${s.to};--focus:${s.focus}">${(s.layers || []).map(([n, l, t, w, anim, d]) =>
+        `<span class="cs-layer ${anim}" style="left:${l}%;top:${t}%;width:${w}%;--d:${d}s">${n === 'sparkle' ? '<i class="cs-spark"></i>'
+          : `<img src="assets/story/nectar/${n}.png" alt="">`}</span>`).join('')}</div>`).join('');
     $('cutscene').hidden = false;
     nextStory();
   }
@@ -1724,6 +1736,7 @@
     }])),
     welcome: () => openPopup('popup-welcome'),
     story: () => startStory(() => toast('Story finished')),
+    story_last: () => { ACTIONS.story(); while (story.i < STORY.length - 1) nextStory(); }, // dev: jump to the last scene
     'story-next': () => nextStory(),
     'story-skip': () => endStory(),
     'welcome-play': () => { closePopup(true); startLevel('flowers', 'easy', 0); },
@@ -1934,7 +1947,9 @@
   // phone app: (re)schedule the "daily reward is ready" notification
   PSNative.scheduleDailyReward(state.settings.notifications);
   // Dev shortcut: index.html#settings opens that screen directly (after the renderer is ready)
-  const startAction = location.hash.slice(1);
+  let startAction = location.hash.slice(1);
+  // dev: add "-still" (e.g. #story_last-still) to freeze animations for screenshots
+  if (startAction.endsWith('-still')) { startAction = startAction.slice(0, -6); document.body.classList.add('dev-still'); }
   pixiReady.then(() => { if (ACTIONS[startAction]) ACTIONS[startAction](); });
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     spawnSwarm(6);
