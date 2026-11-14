@@ -542,6 +542,8 @@
     if (!chosenAge) return;
     state.ageGroup = chosenAge; saveState();
     closePopup(true);
+    // FTUE: brand-new players get the welcome pop-up and then the guided first level
+    if (!state.tutorialSeen && state.stats.levels === 0) openPopup('popup-welcome');
   }
 
   // ---------- Special offer pop-up ----------
@@ -923,7 +925,7 @@
     renderGame();
     if (!loopOn) { loopOn = true; nextTick(); }
     // first level ever: tutorial. New puzzle types: "New Feature!" pop-up the first time they appear.
-    if (state.stats.levels === 0 && !state.tutorialSeen) showTutorial();
+    if (state.stats.levels === 0 && !state.tutorialSeen) startTutorial();
     else {
       const all = game.cols.flat();
       if (all.some((b) => b.mystery) && !state.seen.mystery) { state.seen.mystery = true; saveState(); showUnlock('feature', FEATURES.mystery); }
@@ -1160,7 +1162,8 @@
   function tapBlock(col, idx) {
     const g = game;
     if (!g || g.over) return;
-    hideTutorial();
+    const tutorialTap = coachWantsTap();
+    if (tutorialTap && (col !== coach.col || idx !== 0)) return; // during the tutorial only the shown block works
     const column = g.cols[col], b = column[idx];
     if (!b) return;
     if (idx > 0 && g.mode !== 'pick') return;
@@ -1180,6 +1183,7 @@
     haptic();
     renderSlots(); renderQueue(); renderBoosters();
     const el = document.querySelector(`#screen-game [data-slot="${free}"]`); if (el) el.classList.add('pop');
+    if (tutorialTap) nextCoachStep();
   }
 
   // ---- bees: find an exposed pixel (nothing left below it in its column) ----
@@ -1226,7 +1230,7 @@
     if (!game || currentScreen !== 'game') { loopOn = false; return; }
     const dt = Math.min(50, now - (game.last || now));
     game.last = now;
-    if (!openPopupEl && !game.over && !document.hidden) step(dt);
+    if (!openPopupEl && !game.over && !document.hidden && !tutorialPausesGame()) step(dt);
     nextTick();
   }
   function step(dt) {
@@ -1392,17 +1396,60 @@
     if (kind === 'booster') { state.boosters[item.id] = (state.boosters[item.id] || 0) + 2; saveState(); }
     openPopup('popup-unlock');
   }
-  function showTutorial() {
-    const block = document.querySelector('#g-queue .block:not(.back)');
-    if (!block) return;
-    const app = $('app').getBoundingClientRect(), r = block.getBoundingClientRect();
+  // =====================================================================
+  //  FTUE — guided first level (edit the texts / order here)
+  // =====================================================================
+  // target: what gets the spotlight. wait: 'tap' = the player must tap the shown block. delay: let the game run first (ms)
+  const TUTORIAL_STEPS = [
+    { target: '.board', text: 'This is the <b>picture</b>. Your goal: clear <b>ALL</b> of its pixels!' },
+    { target: '#g-queue', text: 'These are <b>color blocks</b>. The number is how many pixels of that color the block eats.' },
+    { target: 'block', wait: 'tap', text: '<b>Tap this block!</b> It goes to a slot and bees fly out of the tree to eat its color.' },
+    { target: '.board', delay: 1800, text: 'Bees eat from the <b>bottom up</b>: a pixel can only be eaten when nothing is left below it in its column.' },
+    { target: '#g-slots', text: 'Slots are limited! If <b>all slots are full</b> and no bee can reach its color, you\'re <b>out of slots</b> and you <b>lose</b>.' },
+    { target: '#g-boosters', text: 'Stuck? <b>Boosters</b> and <b>AD slots</b> give you extra help. Now finish the picture. Good luck!' },
+  ];
+  let coach = null; // { i, col, waiting }
+  const coachStep = () => coach && TUTORIAL_STEPS[coach.i];
+  const coachWantsTap = () => !!(coach && !coach.waiting && coachStep().wait === 'tap');
+  // the game pauses while the bee is explaining (except while waiting for the first tap)
+  const tutorialPausesGame = () => !!(coach && !coach.waiting && coachStep().wait !== 'tap');
+
+  function startTutorial() { coach = { i: 0 }; showCoachStep(); }
+  function showCoachStep() {
+    const step = coachStep();
+    let el;
+    if (step.target === 'block') {
+      const col = game.cols.findIndex((c) => c[0] && !c[0].frozen && findTarget(game, c[0].color));
+      coach.col = col < 0 ? 0 : col;
+      el = document.querySelector(`#g-queue .block[data-col="${coach.col}"][data-i="0"]`);
+    } else el = document.querySelector('#screen-game ' + step.target);
+    if (!el) return endTutorial();
+    const app = $('app').getBoundingClientRect(), r = el.getBoundingClientRect(), pad = 8;
     const x = r.left - app.left, y = r.top - app.top;
-    Object.assign($('tut-spot').style, { left: x - 8 + 'px', top: y - 8 + 'px', width: r.width + 16 + 'px', height: r.height + 16 + 'px' });
-    Object.assign($('tut-hand').style, { left: x + r.width / 2 + 'px', top: y + r.height / 2 + 'px' });
-    $('tut-bubble').style.top = Math.max(80, y - 150) + 'px';
+    Object.assign($('tut-spot').style, { left: x - pad + 'px', top: y - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px' });
+    const tap = step.wait === 'tap';
+    $('tut-hand').hidden = !tap;
+    if (tap) Object.assign($('tut-hand').style, { left: x + r.width / 2 + 'px', top: y + r.height / 2 + 'px' });
+    $('tut-text').innerHTML = step.text;
+    $('tut-next').hidden = tap;
+    // bubble on the other side of the highlighted area
+    const bub = $('tut-bubble');
+    bub.style.top = (y + r.height / 2 > app.height / 2 ? Math.max(60, y - pad - 150) : Math.min(app.height - 180, y + r.height + pad + 14)) + 'px';
+    $('tut-dots').innerHTML = TUTORIAL_STEPS.map((_, k) => `<i class="${k === coach.i ? 'on' : ''}"></i>`).join('');
+    $('tutorial').classList.toggle('click', !tap);
     $('tutorial').hidden = false;
   }
-  function hideTutorial() { if (!$('tutorial').hidden) { $('tutorial').hidden = true; state.tutorialSeen = true; saveState(); } }
+  function nextCoachStep() {
+    coach.i += 1;
+    if (coach.i >= TUTORIAL_STEPS.length) return endTutorial();
+    const step = coachStep();
+    if (!step.delay) return showCoachStep();
+    $('tutorial').hidden = true; coach.waiting = true; // let the player watch the bees for a moment
+    setTimeout(() => { if (coach) { coach.waiting = false; showCoachStep(); } }, step.delay);
+  }
+  function endTutorial() { coach = null; $('tutorial').hidden = true; state.tutorialSeen = true; saveState(); }
+  function hideTutorial() { if (coach) endTutorial(); } // leaving the level or opening a pop-up ends it
+  $('tutorial').addEventListener('click', () => { if (coach && !coach.waiting && coachStep().wait !== 'tap') nextCoachStep(); });
 
   // ---------- Level checker: solves every level instantly (no animation) with the game's own rules ----------
   // Plays the blocks in solution order, one at a time, eating pixels exactly like the bees do.
@@ -1521,7 +1568,7 @@
     p_offer: () => openOffer(),
     p_booster: () => showUnlock('booster', BOOSTERS[1]),
     p_feature: () => showUnlock('feature', FEATURES.frozen),
-    p_tutorial: () => { if (inGame()) showTutorial(); },
+    p_tutorial: () => { if (inGame()) startTutorial(); },
     p_ad: () => showAd(() => toast('Ad finished')),
     reset: () => {
       if (!window.confirm('Delete ALL saved data (currencies, progress, skins, settings)?')) return;
@@ -1572,7 +1619,15 @@
     fail: () => { ACTIONS.game(); openPopup('popup-fail'); },
     booster_popup: () => { ACTIONS.game(); showUnlock('booster', BOOSTERS[1]); },
     feature: () => { ACTIONS.game(); showUnlock('feature', FEATURES.mystery); },
-    tutorial: () => { ACTIONS.game(); showTutorial(); },
+    tutorial: () => { state.tutorialSeen = false; state.stats.levels = 0; ACTIONS.game(); },
+    // dev: index.html#tut1 … #tut6 opens the tutorial at that step
+    ...Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [`tut${n}`, () => {
+      state.tutorialSeen = false; state.stats.levels = 0; ACTIONS.game();
+      coach.i = n - 1; coach.waiting = false; showCoachStep();
+    }])),
+    welcome: () => openPopup('popup-welcome'),
+    'welcome-play': () => { closePopup(true); startLevel('flowers', 'easy', 0); },
+    howto: () => openPopup('popup-howto'),
     // dev: a simple bot plays the current level (taps a block whose color can reach a pixel)
     pick_test: () => { state.tutorialSeen = true; state.seen = { mystery: true, frozen: true }; state.debugBoosters = true; state.boosters.pick = 5; startGame(state.selected.theme, 'hard', 0); useBooster('pick'); },
     wind_test: () => { state.tutorialSeen = true; state.seen = { mystery: true, frozen: true }; state.debugBoosters = true; state.boosters.wing = 3; startGame(state.selected.theme, 'medium', 0); useBooster('wing'); },
@@ -1668,6 +1723,11 @@
   };
 
   document.addEventListener('click', (e) => {
+    // tutorial "tap this block" step: ignore every other button
+    if (coachWantsTap()) {
+      const blk = e.target.closest('[data-action="tap-block"]');
+      if (!blk || Number(blk.dataset.col) !== coach.col || Number(blk.dataset.i || 0) !== 0) return;
+    }
     // tap on the dark backdrop closes the pop-up
     if (openPopupEl && e.target === openPopupEl) return closePopup();
     const el = e.target.closest('[data-close], [data-toggle], [data-link], [data-action]');

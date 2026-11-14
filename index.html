@@ -390,6 +390,7 @@
           <div class="wood-list wide">
             <button class="gbtn green claim-btn" data-close><span>Resume</span></button>
             <button class="gbtn blue claim-btn" data-action="restart"><span>Restart</span></button>
+            <button class="wood-btn" data-action="howto">How to Play</button>
             <button class="wood-btn" data-action="speed-store">Speed Store</button>
             <button class="wood-btn" data-action="quit">Exit to Menu</button>
           </div>
@@ -440,6 +441,7 @@
         <div class="popup-body center">
           <img class="popup-hero sad" src="assets/sprites/bee.png" alt="">
           <p class="popup-question">No more free slots.</p>
+          <p class="fail-why">All your slots were full and none of their colors could be reached from below.</p>
           <button class="gbtn green claim-btn has-icon" data-action="fail-addslot"><img src="assets/sprites/icon_video_ad.png" alt=""><span>Add Slot</span></button>
           <button class="gbtn blue claim-btn" data-action="restart"><span>Try Again</span></button>
           <div class="legal-links"><button data-action="quit">Give Up</button></div>
@@ -447,11 +449,51 @@
       </div>
     </div>
 
-    <!-- ============ TUTORIAL (first level) ============ -->
+    <!-- ============ TUTORIAL / FTUE (guided first level, steps in js/app.js → TUTORIAL_STEPS) ============ -->
     <div class="tutorial" id="tutorial" hidden>
       <div class="spot" id="tut-spot"></div>
       <img class="tut-hand" id="tut-hand" src="assets/sprites/booster_pick.png" alt="">
-      <div class="tut-bubble" id="tut-bubble"><img src="assets/sprites/bee.png" alt=""><p id="tut-text">Tap a block to send it to a slot! The bees will eat all pixels of that color.</p></div>
+      <div class="tut-bubble" id="tut-bubble">
+        <img src="assets/sprites/bee.png" alt="">
+        <div><p id="tut-text"></p><small id="tut-next">Tap anywhere to continue</small></div>
+      </div>
+      <span class="tut-dots" id="tut-dots"></span>
+    </div>
+
+    <!-- ============ WELCOME (first launch, after the age gate) ============ -->
+    <div class="overlay" id="popup-welcome" data-locked hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+        <div class="ribbon"><h2 id="welcome-title">Hello!</h2></div>
+        <i class="leaf tl"></i><i class="leaf bl"></i><i class="leaf br"></i>
+        <div class="popup-body center">
+          <img class="popup-hero" src="assets/sprites/bee.png" alt="">
+          <p class="popup-question">Welcome to Pixel Swarm!</p>
+          <ul class="howto-list compact">
+            <li><img src="assets/sprites/icon_collections.png" alt=""><span>Pick a <b>theme</b> in <b>Levels</b>: Flowers, Fruits, Animals, Sweets or Ocean.</span></li>
+            <li><img src="assets/sprites/star.png" alt=""><span>Every theme starts on <b>Easy</b>. Finish it to unlock <b>Medium</b>, then <b>Hard</b>.</span></li>
+            <li><img src="assets/sprites/bee_fly.png" alt=""><span>Let's learn how to play with your first level!</span></li>
+          </ul>
+          <button class="gbtn green claim-btn" data-action="welcome-play"><span>Let's play!</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ HOW TO PLAY (from the pause menu) ============ -->
+    <div class="overlay" id="popup-howto" hidden>
+      <div class="popup" role="dialog" aria-modal="true" aria-labelledby="howto-title">
+        <div class="ribbon"><h2 id="howto-title">How to Play</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <div class="popup-body">
+          <ul class="howto-list">
+            <li><img src="assets/sprites/trophy.png" alt=""><span><b>Goal:</b> clear every pixel of the picture to win.</span></li>
+            <li><img src="assets/sprites/block_red.png" alt=""><span><b>Play:</b> tap a block at the front of a line. It goes to a free slot and bees fly out of the tree to eat pixels of its color. The number is how many pixels it eats.</span></li>
+            <li><img src="assets/sprites/bee_fly.png" alt=""><span><b>From the bottom up:</b> a pixel can only be eaten when nothing is left below it in its column. Choose your colors in the right order!</span></li>
+            <li><img src="assets/sprites/slot_empty.png" alt=""><span><b>You lose</b> when all slots are full and none of their colors can be reached: you're <b>Out of Slots</b>.</span></li>
+            <li><img src="assets/sprites/block_mystery.png" alt=""><span><b>Mystery blocks</b> hide their color until they reach the front. <b>Frozen blocks</b> thaw when you use a line next to them.</span></li>
+            <li><img src="assets/sprites/booster_add_slot.png" alt=""><span><b>Help:</b> open AD slots, use boosters (Add Slot, Shuffle, Wind, Free Pick) or play faster with the speed button.</span></li>
+          </ul>
+        </div>
+      </div>
     </div>
 
     <!-- Bottom navigation (shared by the main screens) -->
