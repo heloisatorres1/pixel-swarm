@@ -2238,6 +2238,11 @@
     // careful bot: plays the blocks in solution order (proves every level can be won)
     solve_hard: () => ACTIONS.autoplay('hard', true),
     solve_medium: () => ACTIONS.autoplay('medium', true),
+    // dev: index.html#layout_probe writes the game screen's layout boxes into <body data-rects> (for layout checks)
+    layout_probe: () => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'medium', 0);
+      setTimeout(() => { const r = (id) => { const b = $(id).getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; };
+        document.body.dataset.rects = JSON.stringify({ screen: r('screen-game'), board: r('g-board'), hole: r('g-hole'), adslots: r('g-adslots'),
+          slots: r('g-slots'), queue: r('g-queue'), boosters: r('g-boosters') }); }, 500); },
     autoplay: (diff, ordered) => {
       state.tutorialSeen = true; state.seen = allSeen();
       startGame(state.selected.theme, typeof diff === 'string' ? diff : 'easy', 0); game.speed = FAST_SPEED; game.forceSpeed = true;
