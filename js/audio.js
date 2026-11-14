@@ -9,7 +9,7 @@ window.PSAudio = (function () {
   'use strict';
   let ctx = null, master, musicBus, sfxBus, noiseBuf = null;
   let musicOn = true, sfxOn = true, wanted = null, current = null, timer = null;
-  const VOL = { music: 0.32, sfx: 0.55 };
+  const VOL = { music: 0.5, sfx: 0.55 }; // levels checked with PSAudio.measure(): the music sits close to the effects
 
   function ensure() {
     if (ctx) return ctx;
@@ -112,10 +112,10 @@ window.PSAudio = (function () {
   const SONGS = {
     menu: { bpm: 84, chords: [[48, 55, 64, 71], [45, 52, 60, 67], [41, 48, 57, 64], [43, 50, 59, 65]], // Cmaj7 Am7 Fmaj7 G7
       motifs: [[76, null, 79, 76, 74, null, 72, null], [72, null, 74, 76, 79, null, 76, null], [81, 79, 76, null, 74, 76, 72, null], [74, null, 72, null, 67, null, null, null]],
-      shaker: false, lead: 0.11 },
+      shaker: false, lead: 0.2 },
     game: { bpm: 104, chords: [[48, 55, 64, 72], [43, 50, 59, 67], [45, 52, 60, 69], [41, 48, 57, 65]], // C G Am F
       motifs: [[72, 76, 79, null, 76, 79, 81, 79], [76, null, 74, 72, 74, 76, null, null], [79, 81, 84, 81, 79, 76, 74, 76], [72, null, 74, null, 72, null, null, null]],
-      shaker: true, lead: 0.1 },
+      shaker: true, lead: 0.18 },
   };
   const FORM = [0, 0, 1, 0, 2, 2, 3, 0]; // which motif each half-phrase uses (A A B A, C C D A)
   let song = null, step = 0, nextTime = 0, gainNode = null;
@@ -125,18 +125,23 @@ window.PSAudio = (function () {
     const chord = s.chords[bar % 4];
     // pad: soft chord at the start of each bar
     if (pos === 0) chord.slice(1).forEach((m) => {
-      tone(out, { type: 'triangle', freq: hz(m), t, dur: beat * 4, vol: 0.035, attack: 0.35, release: beat * 3.6, filter: { freq: 1400 } });
-      tone(out, { type: 'sine', freq: hz(m + 12), t, dur: beat * 4, vol: 0.012, attack: 0.5, release: beat * 3.4, detune: 6 });
+      tone(out, { type: 'triangle', freq: hz(m), t, dur: beat * 4, vol: 0.07, attack: 0.35, release: beat * 3.6, filter: { freq: 1600 } });
+      tone(out, { type: 'sine', freq: hz(m + 12), t, dur: beat * 4, vol: 0.025, attack: 0.5, release: beat * 3.4, detune: 6 });
     });
     // bass on beats 1 and 3
-    if (pos === 0 || pos === 4) tone(out, { type: 'sine', freq: hz(chord[0] - 12 + (pos === 4 ? 7 : 0)), t, dur: beat * 1.6, vol: 0.13, attack: 0.01 });
+    // bass on beats 1 and 3 (+ the same note an octave up, so phone and laptop speakers can play it)
+    if (pos === 0 || pos === 4) {
+      const b = chord[0] - 12 + (pos === 4 ? 7 : 0);
+      tone(out, { type: 'sine', freq: hz(b), t, dur: beat * 1.6, vol: 0.16, attack: 0.01 });
+      tone(out, { type: 'triangle', freq: hz(b + 12), t, dur: beat * 1.2, vol: 0.08, attack: 0.01, filter: { freq: 1200 } });
+    }
     // melody
     const motif = s.motifs[FORM[Math.floor(i / 8) % FORM.length]], note = motif[pos];
     if (note) pluck(out, note, t, s.lead, eighth * 3);
     // light shaker on off-beats (game only)
-    if (s.shaker && pos % 2 === 1) noise(out, { t, dur: 0.05, vol: 0.025, type: 'highpass', freq: 6000 });
+    if (s.shaker && pos % 2 === 1) noise(out, { t, dur: 0.05, vol: 0.04, type: 'highpass', freq: 6000 });
     // little sparkle every 4 bars
-    if (pos === 0 && bar % 4 === 3) pluck(out, chord[3] + 24, t + beat * 3, 0.05, 1.2);
+    if (pos === 0 && bar % 4 === 3) pluck(out, chord[3] + 24, t + beat * 3, 0.08, 1.2);
   }
   function loop() {
     if (!song || !ctx) return;
@@ -167,7 +172,31 @@ window.PSAudio = (function () {
   function setMusic(on) { musicOn = on; if (musicBus) musicBus.gain.setTargetAtTime(on ? VOL.music : 0, ctx.currentTime, 0.15); }
   function setSfx(on) { sfxOn = on; if (sfxBus) sfxBus.gain.setTargetAtTime(on ? VOL.sfx : 0, ctx.currentTime, 0.05); }
 
+  // measure(): renders audio offline and returns its loudness (RMS / peak), to balance music against effects
+  async function measure(what, seconds = 8) {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const off = new OAC(1, Math.round(44100 * seconds), 44100), saved = ctx;
+    if (!noiseBuf) { noiseBuf = off.createBuffer(1, 44100, 44100); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    ctx = off;
+    const bus = off.createGain(); bus.connect(off.destination);
+    try {
+      if (SONGS[what]) {
+        bus.gain.value = VOL.music * 0.9;
+        const s = SONGS[what], dt = 60 / s.bpm / 2;
+        for (let i = 0, t = 0.05; t < seconds - 0.5; i++, t += dt) scheduleStep(s, i, t, bus);
+      } else {
+        bus.gain.value = VOL.sfx * 0.9;
+        const keep = sfxBus; sfxBus = bus;
+        what.split(',').forEach((n, i) => SFX[n] && SFX[n](0.05 + i * 0.6));
+        sfxBus = keep;
+      }
+    } finally { ctx = saved; }
+    const data = (await off.startRendering()).getChannelData(0);
+    let sum = 0, peak = 0, n = 0;
+    for (let i = 0; i < data.length; i++) { const v = Math.abs(data[i]); if (v > 0.0005) { sum += v * v; n++; } if (v > peak) peak = v; }
+    return { what, rms: +(Math.sqrt(sum / Math.max(1, n))).toFixed(4), peak: +peak.toFixed(4) };
+  }
   // debug: what has played so far (used by the dev test #audiotest)
   const debug = () => ({ state: ctx ? ctx.state : 'none', music: current, played: { ...played } });
-  return { sfx, music, setMusic, setSfx, unlock, debug };
+  return { sfx, music, setMusic, setSfx, unlock, debug, measure };
 })();

@@ -2619,6 +2619,8 @@
     wardrobe_firefly: () => { showScreen('skins'); viewSkin('firefly'); },
     // dev: index.html#audiotest plays a level with the bot and reports what the audio engine played
     audiotest: () => { PSAudio.unlock(); testPuzzle('wood', true); setTimeout(() => { document.body.dataset.audio = JSON.stringify(PSAudio.debug()); }, 60000); },
+    // dev: index.html#audiolevels renders the music and some effects offline and reports their loudness
+    audiolevels: async () => { const r = []; for (const w of ['menu', 'game', 'pick,slot,coin,tap', 'win']) r.push(await PSAudio.measure(w)); document.body.dataset.levels = JSON.stringify(r); },
     // dev: index.html#layout_probe writes the game screen's layout boxes into <body data-rects> (for layout checks)
     layout_probe: () => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'medium', 0);
       setTimeout(() => { const r = (id) => { const b = $(id).getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; };
@@ -2803,6 +2805,7 @@
     .catch((e) => console.warn('PixiJS unavailable, using 2D canvas', e));
   // music & sounds follow the Settings switches (they start on the player's first tap)
   PSAudio.setMusic(state.settings.music); PSAudio.setSfx(state.settings.sounds);
+  PSAudio.music('menu'); // the home screen opens without showScreen(): ask for its music now (plays on the first tap)
   // phone app: (re)schedule the "daily reward is ready" notification
   PSNative.scheduleDailyReward(state.settings.notifications);
   // Dev shortcut: index.html#settings opens that screen directly (after the renderer is ready)
