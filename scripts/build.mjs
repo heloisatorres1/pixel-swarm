@@ -24,9 +24,10 @@ app = app.replace(/const DEBUG = (true|false);/, `const DEBUG = ${debug};`);
 app = app.replace(/const APP_VERSION = '[^']*';/, `const APP_VERSION = '${pkg.version}';`);
 writeFileSync(appPath, app);
 
-// cache-busting: browsers and itch.io pick up the new version immediately
+// cache-busting: every build gets a unique tag, so browsers and itch.io always load the newest files
+const buildTag = `${pkg.version}-${Date.now().toString(36)}`;
 const htmlPath = join(dist, 'index.html');
-const html = readFileSync(htmlPath, 'utf8').replace(/(href|src)="(css|js)\/([^"?]+)"/g, `$1="$2/$3?v=${pkg.version}"`);
+const html = readFileSync(htmlPath, 'utf8').replace(/(href|src)="(css|js)\/([^"?]+)"/g, `$1="$2/$3?v=${buildTag}"`);
 writeFileSync(htmlPath, html);
 
 console.log(`Built Pixel Swarm v${pkg.version} into dist/ (${debug ? 'DEBUG build' : 'release build, debug menu off'})`);
