@@ -640,6 +640,10 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .board { width: min(100%, 300px); aspect-ratio: 1; padding: 14px; border-radius: 26px; display: grid; place-items: center;
   background: radial-gradient(circle at 50% 40%, #36603f, #30543c 70%); border: 5px solid #e9c48e; box-shadow: 0 0 0 4px #c9762c, 0 8px 0 4px #7a3a10, 0 14px 20px rgba(0,0,0,.3); }
 .board canvas { display: block; image-rendering: pixelated; } /* exact size set by layoutBoard() */
+/* PixiJS gameplay layer (js/pixi-render.js): draws the pixels, bugs and wind over the HTML game screen.
+   When it is running, #g-board stays only as the invisible layout/tap placeholder. */
+.pixi-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.pixi-on #g-board { opacity: 0; }
 /* Hard levels: wooden log wall around the picture (doc: walls only appear in hard levels) */
 .board.walled { border: 10px solid #8a5226; padding: 10px;
   box-shadow: 0 0 0 4px #4d2a0e, inset 0 0 0 4px #c98a4a, inset 0 0 0 7px #6e3410, 0 8px 0 4px #4d2a0e, 0 14px 20px rgba(0,0,0,.3);

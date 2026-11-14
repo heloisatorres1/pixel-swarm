@@ -175,7 +175,7 @@
 
   function haptic() {
     if (!state.settings.haptics) return;
-    try { navigator.vibrate && navigator.vibrate(10); } catch (e) { /* ignore */ }
+    PSNative.vibrate('light'); // Capacitor Haptics on phones, navigator.vibrate on the web
   }
 
   // ---------- Pop-ups ----------
@@ -214,6 +214,7 @@
     renderSettings();
     const names = { music: 'Music', sounds: 'Sounds', haptics: 'Haptics', notifications: 'Notifications' };
     toast(`${names[key]} ${state.settings[key] ? 'on' : 'off'}`);
+    if (key === 'notifications') PSNative.scheduleDailyReward(state.settings.notifications);
   }
   function openLink(key) {
     if (LINKS[key]) window.open(LINKS[key], '_blank', 'noopener');
@@ -424,6 +425,7 @@
     grant({ gems: r.gems || 0, coins: r.coins || 0 });
     toast(`Day ${info.nextIndex + 1}: +${rewardText(r)}`);
     renderActivities();
+    PSNative.scheduleDailyReward(state.settings.notifications);
   }
 
   // ---------- Activities: daily tasks ----------
@@ -1035,12 +1037,16 @@
     cv.width = g.cell * cols; cv.height = g.cell * rows;
     cv.style.width = cv.width / dpr + 'px'; cv.style.height = cv.height / dpr + 'px';
     g.gap = Math.max(1, Math.round(dpr * (g.cell / dpr >= 10 ? 1.5 : 1))); // same gap everywhere
+    // the pixels are drawn by PixiJS (js/pixi-render.js) exactly over this placeholder
+    PSRender.setBoard(g.cells, D.PALETTE, cv, g.cell / dpr, g.gap / dpr);
     drawBoard();
   }
   window.addEventListener('resize', () => { if (game && currentScreen === 'game') layoutBoard(); });
 
-  // board: same mosaic look as the level pictures; eaten pixels disappear
+  // board: eaten pixels disappear (PixiJS)
   function drawBoard() {
+    if (PSRender.ready) return PSRender.syncBoard(game.cells);
+    // fallback when WebGL isn't available: plain 2D canvas
     const g = game, cv = $('g-board'), ctx = cv.getContext('2d'), cell = g.cell;
     const gap = g.gap || 1, shine = Math.max(1, Math.round(cell / 4));
     ctx.clearRect(0, 0, cv.width, cv.height);
@@ -1216,28 +1222,8 @@
 
   // Wind effect: every removed pixel flies away with the gust, sweeping left to right
   function windEffect(removed) {
-    const scr = $('screen-game').getBoundingClientRect(), cv = $('g-board').getBoundingClientRect();
-    const cs = cv.width / game.cells[0].length, layer = $('g-bees');
-    const gust = document.createElement('img');
-    gust.src = 'assets/sprites/booster_wind.png'; gust.className = 'wind-gust'; gust.alt = '';
-    gust.style.top = (cv.top - scr.top + cv.height / 2 - 60) + 'px';
-    layer.appendChild(gust);
-    setTimeout(() => gust.remove(), 1200);
-    const step = Math.max(1, Math.ceil(removed.length / 260)); // cap the number of flying pieces
-    removed.forEach(([x, y, color], i) => {
-      if (i % step) return;
-      const p = document.createElement('i');
-      p.className = 'wind-px';
-      Object.assign(p.style, { background: D.PALETTE[color], width: cs + 'px', height: cs + 'px',
-        left: (cv.left - scr.left + x * cs) + 'px', top: (cv.top - scr.top + y * cs) + 'px',
-        transitionDelay: (x / game.cells[0].length) * 350 + 'ms' });
-      layer.appendChild(p);
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        p.style.transform = `translate(${260 + Math.random() * 220}px, ${(Math.random() - 0.6) * 160}px) rotate(${Math.random() * 540}deg) scale(.4)`;
-        p.style.opacity = '0';
-      }));
-      setTimeout(() => p.remove(), 1500);
-    });
+    const cols = game.cells[0].length, cs = $('g-board').getBoundingClientRect().width / cols;
+    PSRender.wind(removed, D.PALETTE, cs, cols); // PixiJS: gust + flying pixels
   }
 
   // ---- player taps a block ----
@@ -1283,17 +1269,14 @@
     const sx = hole.left - scr.left + hole.width / 2 + (Math.random() - 0.5) * 30, sy = hole.top - scr.top + hole.height / 2;
     const ex = cv.left - scr.left + (t.x + 0.5) * cs, ey = cv.top - scr.top + (t.y + 0.5) * cs;
     // a bee = sprite + the little pixel block it carries home (shown on the way back)
-    const el = document.createElement('div');
-    el.className = 'bee';
-    // smaller bees and carried blocks on bigger (finer) pictures
+    // smaller bees and carried blocks on bigger (finer) pictures — drawn by PixiJS
     const size = Math.max(34, Math.min(44, cs * 3.4)), carry = Math.max(10, Math.min(15, cs * 1.2));
-    Object.assign(el.style, { width: size + 'px', height: size + 'px', margin: `${-size / 2}px 0 0 ${-size / 2}px` });
-    el.innerHTML = `<img src="assets/sprites/${beeSprite()}.png" alt=""><i class="carry" style="background:${D.PALETTE[slotBlock.color]};width:${carry}px;height:${carry}px;left:${(size - carry) / 2}px;top:${size * 0.65}px"></i>`;
-    $('g-bees').appendChild(el);
+    const el = PSRender.spawnBee(`assets/sprites/${beeSprite()}.png`, size, D.PALETTE[slotBlock.color], carry);
+    el.set(sx, sy, 1, 0.8);
     g.bees.push({ el, block: slotBlock, t, sx, sy, ex, ey, hx: sx, hy: sy, phase: 'out',
       cx: (sx + ex) / 2 + (Math.random() - 0.5) * 160, cy: Math.min(sy, ey) + (sy - ey) * 0.3, p: 0 });
   }
-  function clearBees() { $('g-bees').innerHTML = ''; }
+  function clearBees() { $('g-bees').innerHTML = ''; PSRender.clearBees(); }
 
   // ---- main loop ----
   // ~60 fps timer loop (keeps running in every browser, including test runs)
@@ -1331,30 +1314,32 @@
       const flip = bee.ex >= bee.sx ? 1 : -1;
       // going out: grows a bit mid-flight; coming back: shrinks into the hole
       const scale = back ? 1 - 0.65 * p * p : 0.8 + 0.3 * Math.sin(p * Math.PI);
-      bee.el.style.transform = `translate(${x}px, ${y}px) scaleX(${flip}) scale(${scale})`;
+      bee.el.set(x, y, flip, scale);
       if (p < 1) continue;
       if (!back) {
         // reached the pixel: eat it, pick up a little block of its color and fly home
         if (g.cells[bee.t.y][bee.t.x]) { g.cells[bee.t.y][bee.t.x] = null; g.remaining -= 1; }
         g.reserved.delete(bee.t.key);
         bee.block.inFlight -= 1; boardChanged = true; slotsChanged = true;
-        bee.phase = 'back'; bee.p = 0; bee.el.classList.add('back');
+        bee.phase = 'back'; bee.p = 0; bee.el.carry(true);
         bee.sx = bee.ex; bee.sy = bee.ey; bee.ex = bee.hx; bee.ey = bee.hy;
         bee.cx = (bee.sx + bee.ex) / 2 + (Math.random() - 0.5) * 140; bee.cy = (bee.sy + bee.ey) / 2;
       } else {
-        bee.done = true; bee.el.remove(); // back inside the tree
+        bee.done = true; bee.el.destroy(); // back inside the tree
       }
     }
     if (g.bees.some((b) => b.done)) g.bees = g.bees.filter((b) => !b.done);
     if (boardChanged) { drawBoard(); refreshHints(); }
     g.slots.forEach((b, i) => { if (b && b.amount <= 0 && b.inFlight <= 0) { g.slots[i] = null; slotsChanged = true; } });
     if (slotsChanged) renderSlots();
+    PSRender.frame(); // draw this step (also when the browser throttles animation frames)
     if (g.remaining <= 0 && !g.bees.length) return endLevel(true);
     const stuck = !g.bees.length && g.slots.every((b) => b && b.amount > 0 && !findTarget(g, b.color));
     if (stuck) endLevel(false);
   }
   function endLevel(win) {
     game.over = true;
+    if (state.settings.haptics) PSNative.vibrate('heavy');
     if (win) { $('g-board').parentElement.classList.add('flash'); setTimeout(() => { $('g-board').parentElement.classList.remove('flash'); showWin(3 - Math.min(2, game.extras)); }, 600); }
     else openPopup('popup-fail');
   }
@@ -1942,9 +1927,15 @@
   layoutMenuScene();
   renderEventTimer();
   setInterval(renderEventTimer, 30000);
-  // Dev shortcut: index.html#settings opens that screen directly
+  // PixiJS gameplay renderer (board, bugs, wind). If WebGL is missing the game falls back to the 2D canvas.
+  const pixiReady = PSRender.init($('screen-game'),
+    ['bee_fly', 'ladybug_fly', 'beetle', 'butterfly', 'ant', 'firefly', 'booster_wind'].map((n) => `assets/sprites/${n}.png`))
+    .catch((e) => console.warn('PixiJS unavailable, using 2D canvas', e));
+  // phone app: (re)schedule the "daily reward is ready" notification
+  PSNative.scheduleDailyReward(state.settings.notifications);
+  // Dev shortcut: index.html#settings opens that screen directly (after the renderer is ready)
   const startAction = location.hash.slice(1);
-  if (ACTIONS[startAction]) ACTIONS[startAction]();
+  pixiReady.then(() => { if (ACTIONS[startAction]) ACTIONS[startAction](); });
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     spawnSwarm(6);
     requestAnimationFrame(tick);

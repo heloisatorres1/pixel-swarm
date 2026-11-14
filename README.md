@@ -21,8 +21,9 @@ A cute casual puzzle game for mobile and web. Tiny bugs live inside the magical 
 
 | | |
 |---|---|
-| Rendering | HTML/CSS UI + `<canvas>` game board (pixel-exact, DPR-aware) |
-| Code | Vanilla JavaScript (no framework), ~2k lines |
+| Rendering | Hybrid: **PixiJS 8** (WebGL) draws the gameplay — picture board, flying bugs, wind effect — while menus, store and pop-ups are HTML/CSS. Falls back to a 2D canvas if WebGL is unavailable |
+| Code | Vanilla JavaScript (no bundler), ~2k lines; `js/pixi-render.js` renderer, `js/native.js` phone features |
+| Native features | Capacitor Haptics (vibration) + Local Notifications ("daily reward is ready") |
 | Build | Node scripts → `dist/` (release builds disable the debug menu) |
 | Web | GitHub Pages (GitHub Actions) · itch.io (HTML5 zip) |
 | Mobile | Capacitor → Android (iOS possible with a Mac) |
