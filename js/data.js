@@ -64,6 +64,12 @@ window.PS_DATA = (function () {
     medium: { scale: 2, shade: 'both', bgBands: 3, maxColors: 10, slots: 4, blockMin: 14, blockMax: 24, beesPerLaunch: 2, mystery: 0.15, frozen: 0,    walls: false },
     hard:   { scale: 3, shade: 'both', bgBands: 3, maxColors: 12, slots: 3, blockMin: 20, blockMax: 30, beesPerLaunch: 4, mystery: 0.2,  frozen: 0.12, walls: true },
   };
+  // Puzzles (design doc: "in the medium and hard levels some puzzles will show").
+  // number = level (0-based, in each theme) where the puzzle is introduced — it always appears there and
+  // may appear (45%) in the later levels. -1 = no introduction here, appears now and then (25%).
+  // Medium level 1 introduces Mystery blocks and Hard level 1 Frozen blocks (see mystery / frozen above).
+  DIFFICULTY.medium.puzzles = { hidden: 1, linked: 2, big: 3, pipe: 4 };
+  DIFFICULTY.hard.puzzles = { key: 1, wood: 2, cookie: 3, mlinked: 4, hidden: -1, linked: -1, big: -1, pipe: -1 };
   const MIN_CELLS_PER_COLOR = 4;
   const AD_SLOTS = 2; // extra slots per level that the player can open by watching a video ad
 
