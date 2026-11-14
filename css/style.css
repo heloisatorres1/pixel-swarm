@@ -1220,3 +1220,60 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 #look-action .gbtn.small span { font-size: 15px; }
 #look-action .gbtn.small.has-icon { display: flex; align-items: center; justify-content: center; gap: 2px; }
 #look-action .gbtn.small img { width: 20px; }
+
+/* ===================== BUG WARDROBE (Skins screen; art in assets/wardrobe, layout from its CLAUDE-ASSEMBLY.md) ===================== */
+.wd-title { position: relative; width: 300px; max-width: 80%; aspect-ratio: 720 / 220; margin: 0 auto; display: grid; place-items: center;
+  background: url(../assets/wardrobe/wardrobe-title.png) center / 100% 100% no-repeat; }
+.wd-title h2 { margin: -6px 0 0; font: 400 26px "Lilita One"; color: #fff; paint-order: stroke fill; -webkit-text-stroke: 6px var(--ink); white-space: nowrap; }
+.frame-panel.wardrobe { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: url(../assets/wardrobe/wardrobe-panel.svg) center / 100% 100% no-repeat;
+  border: 0; box-shadow: none; }
+/* bug tabs: face + name only */
+.wd-tabs { flex: none; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.wd-tabs::-webkit-scrollbar { display: none; }
+.wd-tab { position: relative; flex: 1 0 54px; min-width: 54px; aspect-ratio: 1; padding: 4px 2px 3px; border: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px; background: url(../assets/wardrobe/species-tab.png) center / 100% 100% no-repeat; }
+.wd-tab.on { background-image: url(../assets/wardrobe/species-tab-selected.png); }
+.wd-tab .face { width: 62%; aspect-ratio: 1; object-fit: contain; }
+.wd-tab span { font: 400 10px "Lilita One"; color: #5a2e0c; white-space: nowrap; }
+.wd-tab.on span { color: #fff; paint-order: stroke fill; -webkit-text-stroke: 3px #3d6a10; }
+.wd-tab .lk { position: absolute; right: 2px; top: 2px; width: 16px; }
+/* hero: forest stage with the outfit + details panel with ONE action */
+.wd-hero { flex: none; position: relative; height: 190px; border-radius: 16px; overflow: hidden; display: flex; align-items: stretch;
+  background: url(../assets/wardrobe/preview-stage.jpg) left center / cover no-repeat; border: 3px solid #e6b56c; }
+.wd-art { flex: 1; display: grid; place-items: end center; padding: 8px 4px 22px; }
+.wd-art img { max-width: 100%; max-height: 150px; object-fit: contain; filter: drop-shadow(0 4px 4px rgba(0,0,0,.25)); animation: idle 2.4s ease-in-out infinite; }
+.wd-details { width: 52%; margin: 8px 8px 8px 0; padding: 0 8px 8px; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center;
+  background: url(../assets/wardrobe/hero-details-panel.svg) center / 100% 100% no-repeat; }
+.wd-details h3 { width: 100%; margin: 4px 0 2px; padding: 3px 0; font: 400 18px "Lilita One"; color: #fff; }
+.wd-details > b { font: 400 18px/1.05 "Lilita One"; color: #4a2810; }
+.wd-badge { padding: 1px 12px 2px; border-radius: 10px; background: url(../assets/wardrobe/preview-badge.svg) center / 100% 100% no-repeat;
+  font: 400 11px "Lilita One"; letter-spacing: .5px; color: #fff; }
+.wd-badge.inuse { background: #5fc21c; box-shadow: inset 0 0 0 2px #3d8a10; }
+.wd-details p { flex: 1; margin: 0; font-weight: 700; font-size: 11.5px; line-height: 1.2; color: #6b3a12; display: grid; place-items: center; }
+/* buttons: live labels over the supplied empty buttons */
+.wd-btn { display: inline-flex; align-items: center; justify-content: center; gap: 3px; height: 38px; min-width: 96px; padding: 0 12px 2px; border: 0;
+  background: url(../assets/wardrobe/action-buy.png) center / 100% 100% no-repeat; font: 400 16px "Lilita One"; color: #fff;
+  paint-order: stroke fill; -webkit-text-stroke: 4px #2f6a0c; white-space: nowrap; }
+.wd-btn.inuse { background-image: url(../assets/wardrobe/action-equipped.png); -webkit-text-stroke-color: #124f86; }
+.wd-btn.locked { background-image: url(../assets/wardrobe/action-locked.svg); color: #6d6a5a; -webkit-text-stroke: 0; font-size: 14px; }
+.wd-btn .gem { width: 20px; } .wd-btn .lk { width: 16px; }
+.wd-details .wd-btn { width: 100%; height: 40px; font-size: 15px; }
+/* "Bee skins · 1 / 7 owned" bar */
+.wd-sub { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 4px 12px 5px; border-radius: 14px;
+  background: linear-gradient(#a8692e, #874c1c); box-shadow: inset 0 2px 0 rgba(255,255,255,.25), 0 2px 0 #5a2e0c; }
+.wd-sub span { font: 400 18px "Lilita One"; color: #fff; paint-order: stroke fill; -webkit-text-stroke: 4px #4a2408; }
+.wd-sub b { padding: 1px 10px; border-radius: 10px; background: rgba(60,28,6,.55); font: 400 13px "Lilita One"; color: #fff; }
+/* outfits: 2-column wide cards, the only part that scrolls */
+.wd-grid { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-content: start; padding: 2px 2px 6px; }
+.wd-card { position: relative; aspect-ratio: 560 / 240; display: flex; align-items: center; gap: 2px; padding: 4px 6px 4px 4px;
+  background: url(../assets/wardrobe/skin-card-wide.png) center / 100% 100% no-repeat; cursor: pointer; }
+.wd-card.selected { background-image: url(../assets/wardrobe/skin-card-selected-wide.png); }
+.wd-card.equipped { background-image: url(../assets/wardrobe/skin-card-equipped-wide.png); }
+.wd-card .art { flex: none; width: 42%; height: 100%; display: grid; place-items: center; }
+.wd-card .art img { max-width: 100%; max-height: 92%; object-fit: contain; }
+.wd-card .info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.wd-card .info b { font: 400 13px "Lilita One"; color: #4a2810; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.wd-card .wd-btn { min-width: 0; width: 100%; height: 28px; padding: 0 6px 2px; font-size: 13px; -webkit-text-stroke-width: 3px; }
+.wd-card .wd-btn .gem { width: 15px; } .wd-card .wd-btn .lk { width: 12px; }
+.wd-card .ok { position: absolute; right: -4px; top: -6px; width: 22px; }
+.wd-card .wd-btn.locked { -webkit-text-stroke: 0; color: #6d6a5a; font-size: 12px; }

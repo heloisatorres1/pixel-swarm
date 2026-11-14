@@ -274,24 +274,24 @@
         </div>
         <button class="close-btn static" data-action="home" aria-label="Close">X</button>
       </header>
-      <div class="screen-title"><div class="ribbon inline"><h2>Skins</h2></div></div>
+      <div class="screen-title"><div class="wd-title"><h2>Bug Wardrobe</h2></div></div>
 
-      <div class="frame-panel">
-        <div class="skin-stage">
-          <button class="arrow-btn left" data-action="skin-prev" aria-label="Previous">‹</button>
-          <div class="stage-art"><img id="skin-preview" src="assets/sprites/bee.png" alt=""><div class="stump"></div></div>
-          <button class="arrow-btn right" data-action="skin-next" aria-label="Next">›</button>
-          <div class="skin-info">
-            <h3><span id="skin-name">Bee</span><b class="check" id="skin-inuse"></b></h3>
-            <p id="skin-desc"></p>
+      <!-- BUG WARDROBE (art: assets/wardrobe). Bug tabs -> hero preview with ONE action -> this bug's outfits.
+           All names, prices, badges and counts are live text. -->
+      <div class="frame-panel wardrobe">
+        <div class="wd-tabs" id="wd-tabs"></div>
+        <div class="wd-hero">
+          <div class="wd-art"><img id="skin-preview" src="assets/sprites/bee.png" alt=""></div>
+          <div class="wd-details">
+            <h3 id="wd-species">Bee</h3>
+            <b id="wd-look">Classic</b>
+            <span class="wd-badge" id="wd-badge">PREVIEW</span>
+            <p id="wd-desc"></p>
+            <div class="wd-action" id="wd-action"></div>
           </div>
         </div>
-        <!-- looks (cosmetic skins) of the bug shown above: assets/skins -->
-        <div class="look-box">
-          <div class="look-strip" id="look-strip"></div>
-          <div class="look-bar"><span id="look-name">Classic</span><span id="look-action"></span></div>
-        </div>
-        <div class="skin-grid" id="skin-grid"></div>
+        <div class="wd-sub"><span id="wd-sub">Bee skins</span><b id="wd-owned">1 / 7 owned</b></div>
+        <div class="wd-grid" id="wd-grid"></div>
       </div>
     </section>
 
@@ -521,7 +521,7 @@
     <nav class="bottom-nav" id="bottom-nav">
       <button class="nav-btn" data-action="store" data-screen="store"><img src="assets/sprites/icon_store.png" alt=""><span>Store</span></button>
       <button class="nav-btn active" data-action="home" data-screen="menu"><img src="assets/sprites/icon_home.png" alt=""><span>Home</span></button>
-      <button class="nav-btn" data-action="skins" data-screen="skins"><img src="assets/sprites/icon_skins.png" alt=""><span>Skins</span></button>
+      <button class="nav-btn" data-action="skins" data-screen="skins"><img src="assets/sprites/icon_skins.png" alt=""><span>Wardrobe</span></button>
     </nav>
 
     <!-- Fake video ad (placeholder until a real ad network is added) -->

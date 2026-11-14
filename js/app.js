@@ -651,7 +651,8 @@
   ];
   let viewingSkin = null;
 
-  // ---- LOOKS: cosmetic skins for each bug (art in assets/skins/<bug>-<look>.png; 'classic' = the original sprite) ----
+  // ---- BUG WARDROBE: each bug has 7 looks (outfits). Art: assets/skins/<bug>-<look>.png ('classic' = the original
+  // sprite), UI art: assets/wardrobe. Buying a BUG (species) and buying a LOOK are separate purchases.
   const LOOK_PRICE = 80; // gems per look (edit here)
   const LOOKS = {
     bee:       [['classic', 'Classic'], ['astronaut', 'Astronaut'], ['explorer', 'Explorer'], ['flower', 'Flower'], ['royal', 'Royal'], ['winter', 'Winter'], ['zee', 'Zee']],
@@ -661,66 +662,87 @@
     ant:       [['classic', 'Classic'], ['builder', 'Builder'], ['chef', 'Chef'], ['explorer', 'Explorer'], ['knight', 'Knight'], ['miner', 'Miner'], ['wizard', 'Wizard']],
     firefly:   [['classic', 'Classic'], ['celestial', 'Celestial'], ['ember', 'Ember'], ['fairy', 'Fairy'], ['lantern', 'Lantern'], ['neon', 'Neon'], ['winter', 'Winter']],
   };
+  // one line under each outfit's name in the hero (Classic uses the bug's own description)
+  const LOOK_DESC = {
+    'bee-astronaut': 'Ready for a cosmic adventure!', 'bee-explorer': 'Map, binoculars and a big hat.', 'bee-flower': 'Blooming with spring colors.',
+    'bee-royal': 'Long live the queen of the hive!', 'bee-winter': 'Cozy scarf, warm wings.', 'bee-zee': 'Black and white, extra cool.',
+    'ladybug-leafy': 'Hides perfectly in the garden.', 'ladybug-pirate': 'Arr! Treasure hunting time.', 'ladybug-rainbow': 'Every color, all at once!',
+    'ladybug-samurai': 'Brave, calm and very honorable.', 'ladybug-spotted-pink': 'Pretty in pink spots.', 'ladybug-starry': 'A night sky on its back.',
+    'beetle-crystal': 'Sparkles in the sunlight.', 'beetle-forest': 'Moss, flowers and a gentle heart.', 'beetle-golden': 'Shiny, precious and proud.',
+    'beetle-lava': 'Hot stuff from the volcano!', 'beetle-rocky': 'Solid as a mountain.', 'beetle-tundra': 'Cool as ice, tough as frost.',
+    'butterfly-celestial': 'Wings full of moons and stars.', 'butterfly-cherry-blossom': 'Soft petals on every wing.', 'butterfly-fairy': 'A sprinkle of forest magic.',
+    'butterfly-flaming': 'Wings that blaze like fire!', 'butterfly-icewing': 'Snowflakes on every flutter.', 'butterfly-lunar': 'Glows softly under the moon.',
+    'ant-builder': 'Hard hat on, ready to build!', 'ant-chef': 'Cooking up something tasty.', 'ant-explorer': 'Off to find new trails.',
+    'ant-knight': 'Shining armor, brave heart.', 'ant-miner': 'Digs deep for treasure.', 'ant-wizard': 'A little ant with big magic.',
+    'firefly-celestial': 'Shines like a little star.', 'firefly-ember': 'Glowing warm like a campfire.', 'firefly-fairy': 'Lights the way for the fairies.',
+    'firefly-lantern': 'A golden lantern in the dark.', 'firefly-neon': 'Bright neon glow!', 'firefly-winter': 'Warm light on snowy nights.',
+  };
   const lookOf = (bug) => state.looks[bug] || 'classic';
   const lookSrc = (bug, look = lookOf(bug)) => (look === 'classic' ? `assets/sprites/${bug}.png` : `assets/skins/${bug}-${look}.png`);
-  const ownsLook = (bug, look) => look === 'classic' || state.ownedLooks.includes(`${bug}-${look}`);
+  const ownsLook = (bug, look) => state.ownedSkins.includes(bug) && (look === 'classic' || state.ownedLooks.includes(`${bug}-${look}`));
+  const lookName = (bug, look) => LOOKS[bug].find((l) => l[0] === look)[1];
+  const equipped = (bug, look) => state.creature === bug && lookOf(bug) === look && state.ownedSkins.includes(bug);
   // the art of the bug the player uses (menu, win screen) and the one flying in levels:
   // the classic look keeps its flying pose; the new looks only come as a standing pose, so they fly as they are
   const creatureArt = () => lookSrc(state.creature);
   const creatureFly = () => (lookOf(state.creature) === 'classic' ? `assets/sprites/${beeSprite()}.png` : creatureArt());
+  const wd = (n) => `assets/wardrobe/${n}`;
   let viewingLook = null;
-  function renderLooks(bug) {
-    const look = viewingLook || lookOf(bug), ownsBug = state.ownedSkins.includes(bug);
-    $('look-strip').innerHTML = LOOKS[bug].map(([id, name]) => {
-      const using = ownsBug && state.creature === bug && lookOf(bug) === id;
-      return `<button class="look ${look === id ? 'viewing' : ''} ${using ? 'inuse' : ''} ${ownsLook(bug, id) ? '' : 'locked'}"
-        data-action="look-view" data-look="${id}" aria-label="${name}"><img src="${lookSrc(bug, id)}" alt="">${using ? '<b class="check"></b>' : ''}</button>`;
+  // the one action for a bug + look, following the wardrobe rules (unlock bug / level / buy look / equip / in use)
+  function lookAction(bug, look, small) {
+    const sp = SKINS.find((x) => x.id === bug), gem = `<img class="gem" src="${wd('reward-gem.png')}" alt="">`;
+    if (!state.ownedSkins.includes(bug)) {
+      if (sp.level && state.playerLevel < sp.level) return `<button class="wd-btn locked" disabled><img class="lk" src="${wd('lock-icon.png')}" alt=""><span>Level ${sp.level}</span></button>`;
+      return small ? `<button class="wd-btn locked" disabled><img class="lk" src="${wd('lock-icon.png')}" alt=""><span>Locked</span></button>`
+        : `<button class="wd-btn buy" data-action="skin-buy" data-skin="${bug}"><span>Unlock ${sp.name}</span>${gem}<span>${sp.price}</span></button>`;
+    }
+    if (equipped(bug, look)) return '<button class="wd-btn inuse" disabled><span>In Use</span></button>';
+    if (ownsLook(bug, look)) return `<button class="wd-btn buy" data-action="look-use" data-look="${look}"><span>Equip</span></button>`;
+    return `<button class="wd-btn buy" data-action="look-buy" data-look="${look}">${gem}<span>${LOOK_PRICE}</span></button>`;
+  }
+  function renderSkins() {
+    if (!viewingSkin) viewingSkin = state.creature;
+    const bug = viewingSkin, sp = SKINS.find((x) => x.id === bug), look = viewingLook || lookOf(bug);
+    // bug tabs: face + name only (a small lock on bugs not owned yet)
+    $('wd-tabs').innerHTML = SKINS.map((x) => `<button class="wd-tab ${x.id === bug ? 'on' : ''}" data-action="skin-view" data-skin="${x.id}" aria-label="${x.name}">
+      <img class="face" src="${wd('face-' + x.id + '.png')}" alt=""><span>${x.name}</span>
+      ${state.ownedSkins.includes(x.id) ? '' : `<img class="lk" src="${wd('lock-icon.png')}" alt="">`}</button>`).join('');
+    // hero: the previewed outfit, its status and ONE action
+    $('skin-preview').src = lookSrc(bug, look);
+    $('wd-species').textContent = sp.name;
+    $('wd-look').textContent = lookName(bug, look);
+    const inUse = equipped(bug, look);
+    $('wd-badge').textContent = inUse ? 'IN USE' : 'PREVIEW';
+    $('wd-badge').classList.toggle('inuse', inUse);
+    $('wd-desc').textContent = look === 'classic' ? sp.desc : LOOK_DESC[`${bug}-${look}`] || '';
+    $('wd-action').innerHTML = lookAction(bug, look, false);
+    // this bug's outfits
+    $('wd-sub').textContent = `${sp.name} skins`;
+    $('wd-owned').textContent = `${LOOKS[bug].filter(([id]) => ownsLook(bug, id)).length} / ${LOOKS[bug].length} owned`;
+    $('wd-grid').innerHTML = LOOKS[bug].map(([id, name]) => {
+      const card = equipped(bug, id) ? 'equipped' : id === look ? 'selected' : '';
+      return `<div class="wd-card ${card}" data-action="look-view" data-look="${id}">
+        <div class="art"><img src="${lookSrc(bug, id)}" alt=""></div>
+        <div class="info"><b>${name}</b>${lookAction(bug, id, true)}</div>
+        ${equipped(bug, id) ? `<img class="ok" src="${wd('claimed-check.png')}" alt="">` : ''}</div>`;
     }).join('');
-    $('look-name').textContent = LOOKS[bug].find((l) => l[0] === look)[1];
-    const using = ownsBug && state.creature === bug && lookOf(bug) === look;
-    $('look-action').innerHTML = !ownsBug ? '<button class="gbtn gray small" disabled><span>Get this bug first</span></button>'
-      : using ? '<button class="gbtn blue small" disabled><span>In Use</span></button>'
-      : ownsLook(bug, look) ? `<button class="gbtn green small" data-action="look-use" data-look="${look}"><span>Use</span></button>`
-      : `<button class="gbtn green small has-icon" data-action="look-buy" data-look="${look}">${img('gem')}<span>${LOOK_PRICE}</span></button>`;
   }
   function viewLook(look) { viewingLook = look; renderSkins(); }
   function useLook(look) {
     const bug = viewingSkin;
-    if (!state.ownedSkins.includes(bug) || !ownsLook(bug, look)) return;
-    state.looks[bug] = look; state.creature = bug; viewingLook = null;
+    if (!ownsLook(bug, look)) return;
+    state.looks[bug] = look; state.creature = bug; viewingLook = look;
     saveState(); renderSkins(); renderMenu();
     PSRender.preload([creatureFly()]);
-    toast(`${LOOKS[bug].find((l) => l[0] === look)[1]} ${SKINS.find((x) => x.id === bug).name} selected!`);
+    toast(`${lookName(bug, look)} ${SKINS.find((x) => x.id === bug).name} equipped!`);
   }
   function buyLook(look) {
     const bug = viewingSkin;
-    if (!state.ownedSkins.includes(bug)) return toast('Get this bug first');
+    if (!state.ownedSkins.includes(bug)) return toast(`Unlock the ${SKINS.find((x) => x.id === bug).name} first`);
     if (state.gems < LOOK_PRICE) return toast(`Not enough gems (need ${LOOK_PRICE})`);
     state.gems -= LOOK_PRICE; state.ownedLooks.push(`${bug}-${look}`);
     renderHud(); bumpCurrency('ui-gems');
     useLook(look);
-  }
-  function renderSkins() {
-    if (!viewingSkin) viewingSkin = state.creature;
-    const v = SKINS.find((s) => s.id === viewingSkin);
-    $('skin-preview').src = lookSrc(v.id, viewingLook || lookOf(v.id));
-    renderLooks(v.id);
-    $('skin-name').textContent = v.name;
-    $('skin-inuse').hidden = state.creature !== v.id;
-    $('skin-desc').textContent = v.desc;
-    $('skin-grid').innerHTML = SKINS.map((s) => {
-      const owned = state.ownedSkins.includes(s.id), inUse = state.creature === s.id;
-      const lockedByLevel = !owned && s.level && state.playerLevel < s.level;
-      let btn;
-      if (inUse) btn = `<button class="gbtn blue small" disabled><span>In Use</span></button>`;
-      else if (owned) btn = `<button class="gbtn green small" data-action="skin-use" data-skin="${s.id}"><span>Use</span></button>`;
-      else if (lockedByLevel) btn = `<button class="gbtn gray small" data-action="skin-view" data-skin="${s.id}"><span>Level ${s.level}</span></button>`;
-      else btn = `<button class="gbtn green small has-icon" data-action="skin-buy" data-skin="${s.id}">${img('gem')}<span>${s.price}</span></button>`;
-      return `<div class="skin-card ${inUse ? 'inuse' : ''} ${viewingSkin === s.id ? 'viewing' : ''} ${lockedByLevel ? 'locked' : ''}"
-          data-action="skin-view" data-skin="${s.id}">
-        ${inUse ? '<b class="check"></b>' : ''}
-        <div class="art"><img src="${lookSrc(s.id)}" alt="">${lockedByLevel ? img('icon_lock', 'lock') : ''}</div>${btn}</div>`;
-    }).join('');
   }
   function viewSkin(id) {
     viewingSkin = id; viewingLook = null; renderSkins();
@@ -729,21 +751,23 @@
   }
   function stepSkin(dir) {
     const i = SKINS.findIndex((s) => s.id === viewingSkin);
-    viewingSkin = SKINS[(i + dir + SKINS.length) % SKINS.length].id; viewingLook = null; renderSkins();
+    viewSkin(SKINS[(i + dir + SKINS.length) % SKINS.length].id);
   }
   function useSkin(id) {
     state.creature = id; viewingSkin = id; viewingLook = null; saveState(); renderSkins();
     PSRender.preload([creatureFly()]);
-    toast(`${SKINS.find((s) => s.id === id).name} selected!`);
   }
+  // unlocking a bug equips it (with its classic look); buying a look is a separate purchase
   function buySkin(id) {
     const s = SKINS.find((x) => x.id === id);
+    if (s.level && state.playerLevel < s.level) return toast(`Unlocks at player level ${s.level}`);
     if (state.gems < s.price) { toast(`Not enough gems (need ${s.price})`); return; }
     state.gems -= s.price; state.ownedSkins.push(id);
     saveState(); renderHud(); bumpCurrency('ui-gems');
     useSkin(id);
     toast(`${s.name} unlocked!`);
   }
+
 
   // =====================================================================
   //  THEMES & LEVELS  (data in js/data.js)
@@ -2543,6 +2567,15 @@
         settle(game);
         res.key = q.got && !game.cols.flat().some((it) => it.kind === 'lock' && it.id === q.id) ? 'ok' : 'FAIL got=' + q.got;
       }
+      // wardrobe: unlock a bug, buy one of its looks, then equip the classic look again — all by tapping
+      game.over = true; state.gems = 1000; showScreen('skins'); viewSkin('ladybug');
+      click('#wd-action .wd-btn');                                   // "Unlock Ladybug 150"
+      const unlocked = state.ownedSkins.includes('ladybug') && state.creature === 'ladybug' && state.gems === 850;
+      click('#wd-grid .wd-card[data-look="pirate"] .wd-btn');         // buy the Pirate look (80)
+      const bought = state.ownedLooks.includes('ladybug-pirate') && lookOf('ladybug') === 'pirate' && state.gems === 770;
+      click('#wd-grid .wd-card[data-look="classic"] .wd-btn');        // Equip classic
+      const equippedBack = lookOf('ladybug') === 'classic' && $('wd-owned').textContent.startsWith('2');
+      res.wardrobe = unlocked && bought && equippedBack ? 'ok' : `FAIL unlocked=${unlocked} bought=${bought} equip=${equippedBack}`;
       document.body.dataset.clicktest = JSON.stringify(res);
     },
     // dev: index.html#achievements opens Collections on the Achievements tab (with some sample stats)
@@ -2570,6 +2603,9 @@
     // dev: index.html#looks_demo buys the Astronaut bee look (with test gems); #looks_play then plays a level with it
     looks_demo: () => { state.gems = 500; showScreen('skins'); viewSkin('bee'); viewLook('astronaut'); buyLook('astronaut'); },
     looks_play: () => { ACTIONS.looks_demo(); setTimeout(() => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'easy', 0); game.speed = 2; startBot(); }, 1500); },
+    // dev: index.html#wardrobe_ladybug / #wardrobe_firefly — the wardrobe on a bug the player doesn't own yet
+    wardrobe_ladybug: () => { showScreen('skins'); viewSkin('ladybug'); viewLook('pirate'); },
+    wardrobe_firefly: () => { showScreen('skins'); viewSkin('firefly'); },
     // dev: index.html#layout_probe writes the game screen's layout boxes into <body data-rects> (for layout checks)
     layout_probe: () => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'medium', 0);
       setTimeout(() => { const r = (id) => { const b = $(id).getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; };
