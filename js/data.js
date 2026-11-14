@@ -62,7 +62,7 @@ window.PS_DATA = (function () {
     // bgBands: 2 = sky + ground, 3 = sky + ground + deep ground
     easy:   { scale: 1, shade: 'none', bgBands: 2, maxColors: 7,  slots: 4, blockMin: 8,  blockMax: 15, beesPerLaunch: 1, mystery: 0,    frozen: 0,    walls: false },
     medium: { scale: 2, shade: 'both', bgBands: 3, maxColors: 10, slots: 4, blockMin: 14, blockMax: 24, beesPerLaunch: 2, mystery: 0.15, frozen: 0,    walls: false },
-    hard:   { scale: 3, shade: 'both', bgBands: 3, maxColors: 12, slots: 3, blockMin: 20, blockMax: 30, beesPerLaunch: 4, mystery: 0.2,  frozen: 0.12, walls: true },
+    hard:   { scale: 3, shade: 'both', bgBands: 3, maxColors: 12, slots: 3, blockMin: 20, blockMax: 30, beesPerLaunch: 4, mystery: 0.2,  frozen: 0.2,  walls: true },
   };
   // Puzzles (design doc: "in the medium and hard levels some puzzles will show").
   // number = level (0-based, in each theme) where the puzzle is introduced — it always appears there and

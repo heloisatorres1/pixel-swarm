@@ -127,6 +127,16 @@ window.PSRender = (function () {
         gr.roundRect(x + w * 0.15, y + h * 0.12, w * 0.7, h * 0.16, c * 0.15).fill({ color: 0xffffff, alpha: 0.45 });
         overC.addChild(gr);
         const t = txt(it.text, Math.max(11, Math.min(w, h) * 0.6)); t.position.set(x + w / 2, y + h / 2 + 1); overC.addChild(t);
+      } else if (it.kind === 'keycell') {
+        // the key's nest inside the picture: a light tile with the key; bugs clear the pixels around it to collect it
+        const gr = new PIXI.Graphics();
+        gr.roundRect(x, y, w, h, c * 0.35).fill(0xfff4dc).stroke({ color: 0xe0a020, width: Math.max(1.5, c * 0.25) });
+        overC.addChild(gr);
+        const tex = PZ('key'), size = Math.max(24, Math.max(w, h) * 1.35);
+        if (!tex) { const t = txt('🔑', size * 0.7); t.position.set(x + w / 2, y + h / 2); overC.addChild(t); return; }
+        const sp = new PIXI.Sprite(tex);
+        sp.anchor.set(0.5); sp.scale.set(size / Math.max(tex.width, tex.height)); sp.position.set(x + w / 2, y + h / 2);
+        overC.addChild(sp);
       } else if (it.kind === 'icon') {
         // the key sprite, a bit bigger than its pixel so it's easy to spot
         const tex = PZ(it.tex), size = Math.max(28, c * 3.4);
