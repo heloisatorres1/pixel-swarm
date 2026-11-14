@@ -28,7 +28,8 @@
     selected: { theme: 'flowers' },     // theme shown on the main menu "Level" button
     progress: {},                       // "flowers-easy": [3, 2, 3] = stars of each completed level
     gallery: [],                        // pictures completed at least once
-    stats: { levels: 0, hard: 0, boosters: 0, daily: 0, coinsEarned: 0 },
+    stats: { levels: 0, hard: 0, boosters: 0, daily: 0, coinsEarned: 0, firstTry: 0, perfect: 0, pixels: 0, eventWins: 0 },
+    attempts: {},                       // level key -> how many times it was started (for "first-try wins")
     event: { ends: 0, pumpkins: 0, levels: [], claimedRewards: [] }, // levels = stars of each won event level
     playerName: 'Player',
     avatar: 'bee',
@@ -240,7 +241,7 @@
     document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === 'screen-' + name));
     document.querySelectorAll('#bottom-nav .nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
     currentScreen = name;
-    $('app').classList.toggle('no-nav', name === 'game');
+    $('app').classList.toggle('no-nav', name === 'game' || name === 'events');
     $('app').classList.toggle('no-ads', !!state.noAds);
     if (name !== 'game') hideTutorial();
     if (name === 'menu') { renderMenu(); layoutMenuScene(); }
@@ -784,6 +785,9 @@
       const pic = D.levelPicture(info.theme, info.diff, info.index);
       if (!state.gallery.includes(pic)) state.gallery.push(pic);
       state.stats.levels += 1;
+      if (info.firstTry) state.stats.firstTry += 1;    // won on the very first attempt at that level
+      if (info.stars >= 3) state.stats.perfect += 1;
+      if (info.event) state.stats.eventWins += 1;
       progressTask('play3');
       if (info.diff === 'hard') { state.stats.hard += 1; progressTask('hard1'); }
     }
@@ -795,16 +799,19 @@
   // =====================================================================
   //  COLLECTIONS
   // =====================================================================
+  // Achievements = the player's stats: each card is a counter that keeps going up (no goal).
   const ACHIEVEMENTS = [
-    { title: 'First Level',    icon: 'trophy',          goal: 1,    value: () => state.stats.levels },
-    { title: 'Level Lover',    icon: 'icon_speed',      goal: 25,   value: () => state.stats.levels },
-    { title: 'Booster Master', icon: 'booster_shuffle', goal: 10,   value: () => state.stats.boosters },
-    { title: 'Coin Collector', icon: 'coins_pile',      goal: 5000, value: () => state.stats.coinsEarned },
-    { title: 'Gem Collector',  icon: 'gems_pile',       goal: 500,  value: () => state.gems },
-    { title: 'Daily Player',   icon: 'icon_activities', goal: 7,    value: () => state.stats.daily },
-    { title: 'Hard Winner',    icon: 'star',            goal: 5,    value: () => state.stats.hard },
-    { title: 'Event Expert',   icon: 'icon_events',     goal: 100,  value: () => state.event.pumpkins },
-    { title: 'Bug Collector',  icon: 'bee',             goal: 6,    value: () => state.ownedSkins.length },
+    { title: 'Levels Won',      icon: 'trophy',          value: () => state.stats.levels },
+    { title: 'First-Try Wins',  icon: 'star',            value: () => state.stats.firstTry },
+    { title: 'Perfect Wins',    icon: 'chest',           value: () => state.stats.perfect },
+    { title: 'Hard Wins',       icon: 'icon_speed',      value: () => state.stats.hard },
+    { title: 'Pixels Eaten',    icon: 'bee_fly',         value: () => state.stats.pixels },
+    { title: 'Boosters Used',   icon: 'booster_shuffle', value: () => state.stats.boosters },
+    { title: 'Coins Earned',    icon: 'coins_pile',      value: () => state.stats.coinsEarned },
+    { title: 'Daily Rewards',   icon: 'icon_activities', value: () => state.stats.daily },
+    { title: 'Bugs Collected',  icon: 'bee',             value: () => state.ownedSkins.length },
+    { title: 'Event Wins',      icon: 'icon_events',     value: () => state.stats.eventWins },
+    { title: 'Pictures Done',   icon: 'icon_collections', value: () => state.gallery.length },
   ];
   const COL_PAGE_SIZE = { gallery: 6, achievements: 9, bugs: 12 };
   let colTab = 'gallery', colPage = 0;
@@ -820,12 +827,12 @@
         : `<div class="pic-card locked"><img src="${D.pictureURL(id, 10, { silhouette: true })}" alt=""><span class="name">???</span></div>`).join('')}</div>`;
     } else if (colTab === 'achievements') {
       items = ACHIEVEMENTS;
-      const done = items.filter((a) => a.value() >= a.goal).length;
-      counter = `${done}/${items.length}`;
+      counter = `Levels won: ${state.stats.levels.toLocaleString('en-US')}`;
+      // a card lights up once its counter has started
       html = (page) => `<div class="grid3x">${page.map((a, i) => {
-        const v = Math.min(a.goal, a.value()), ok = v >= a.goal;
-        return `<div class="ach ${ok ? 'c' + (i % 5) : 'locked'}">${img(a.icon)}<h4>${a.title}</h4>
-          <div class="bar"><i style="width:${(v / a.goal) * 100}%"></i><span>${v.toLocaleString('en-US')}/${a.goal.toLocaleString('en-US')}</span></div></div>`;
+        const v = a.value() || 0;
+        return `<div class="ach ${v > 0 ? 'c' + (i % 5) : 'locked'}">${img(a.icon)}<h4>${a.title}</h4>
+          <b class="ach-count">${v.toLocaleString('en-US')}</b></div>`;
       }).join('')}</div>`;
     } else {
       items = SKINS;
@@ -1300,6 +1307,8 @@
     clearBees();
     game = buildLevel(theme, diff, index, opts.puzzles);
     game.event = !!opts.event;
+    game.key = `${game.event ? 'event' : theme}-${diff}-${index}`;
+    if (!opts.puzzles) state.attempts[game.key] = (state.attempts[game.key] || 0) + 1; // (test levels don't count)
     showScreen('game');
     renderGame();
     if (!loopOn) { loopOn = true; nextTick(); }
@@ -1743,6 +1752,7 @@
           // the pixel counts as eaten from the moment its bee leaves (same order as the level checker, so
           // puzzles like the cookie or the hammer react exactly as planned); it stays drawn until the bee takes it
           const ev = eatPixel(g, t.key);
+          state.stats.pixels += 1; // (saved with the next save)
           const pend = ev.cells || [t.key];
           pend.forEach((k) => g.pending.set(k, b.color)); b.amount -= 1; b.inFlight += 1;
           launchBee(g, b, t); Object.assign(g.bees[g.bees.length - 1], { ev, pend }); slotsChanged = true; boardChanged = true;
@@ -1870,7 +1880,7 @@
   function showWin(stars = 3) {
     const g = game;
     const firstEventWin = g.event && g.index === state.event.levels.length;
-    track('level', { theme: g.theme, diff: g.diff, index: g.index, stars, event: g.event });
+    track('level', { theme: g.theme, diff: g.diff, index: g.index, stars, event: g.event, firstTry: state.attempts[g.key] === 1 });
     $('win-pumpkins').hidden = !firstEventWin;
     $('win-pk').textContent = '+' + EVENT_PUMPKINS_PER_WIN;
     g.reward = WIN_COINS[g.diff];
@@ -2397,6 +2407,9 @@
       }
       document.body.dataset.clicktest = JSON.stringify(res);
     },
+    // dev: index.html#achievements opens Collections on the Achievements tab (with some sample stats)
+    achievements: () => { Object.assign(state.stats, { levels: 12, firstTry: 7, perfect: 5, hard: 2, pixels: 4321, boosters: 3, coinsEarned: 560, daily: 4 });
+      showScreen('collections'); colTab = 'achievements'; colPage = 0; renderCollections(); },
     // dev: index.html#layout_probe writes the game screen's layout boxes into <body data-rects> (for layout checks)
     layout_probe: () => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'medium', 0);
       setTimeout(() => { const r = (id) => { const b = $(id).getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; };
