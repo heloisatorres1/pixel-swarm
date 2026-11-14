@@ -874,10 +874,11 @@
   function fitEvents() {
     const box = document.querySelector('#screen-events .ev-scroll'), fit = box && box.querySelector('.ev-fit');
     if (!fit || !box.clientHeight) return;
-    fit.style.zoom = 1;
+    // a scale transform doesn't change the layout size, so one exact measurement is enough
+    fit.style.transform = '';
     const cs = getComputedStyle(box), have = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    const need = fit.offsetHeight;
-    fit.style.zoom = need > have ? (have / need).toFixed(3) : 1;
+    const s = Math.min(1, have / fit.offsetHeight);
+    fit.style.transform = s < 1 ? `scale(${s.toFixed(4)})` : '';
   }
   window.addEventListener('resize', () => { if (currentScreen === 'events') fitEvents(); });
 
@@ -893,35 +894,43 @@
     { at: 80, gems: 100, icon: 'gem', label: '100' },
     { at: 120, gems: 200, coins: 3000, icon: 'trophy', label: 'Big Prize' },
   ];
+  // Event map (assets/events, 900x1125 design): node centres in that space, level 1..12 along the winding path
+  const EV_POS = [[150, 212.5], [450, 212.5], [750, 212.5], [750, 442.5], [450, 442.5], [150, 442.5],
+    [150, 672.5], [450, 672.5], [750, 672.5], [750, 902.5], [450, 902.5], [150, 902.5]];
+  const EV_REWARD_ICON = ['reward-coins', 'reward-gems', 'reward-chest', 'reward-gem', 'reward-trophy'];
+  const evImg = (n, cls = '') => `<img class="${cls}" src="assets/events/${n}" alt="">`;
   function renderEvents() {
     const E = state.event, N = D.EVENT.levels, done = E.levels.length;
     renderEventTimer();
-    // level path: rows of 3, the path turns right / left between rows
-    let html = '';
-    for (let r = 0; r < N / 3; r++) {
-      html += '<div class="ev-row">';
-      for (let c = 0; c < 3; c++) {
-        const i = r * 3 + c;
-        if (i < done) html += `<button class="ev-node" data-action="event-level" data-i="${i}">${i + 1}${starsHtml(E.levels[i])}</button>`;
-        else if (i === done) html += `<button class="ev-node current" data-action="event-level" data-i="${i}">${i + 1}${starsHtml(0)}</button>`;
-        else html += `<div class="ev-node locked">${img('icon_lock')}${i + 1}</div>`;
-      }
-      html += '</div>';
-      if (r < N / 3 - 1) html += `<div class="ev-turn ${r % 2 === 0 ? 'right' : 'left'}"></div>`;
+    const at = (x, y) => `left:${(x / 900) * 100}%;top:${(y / 1125) * 100}%`;
+    // layers: map background (CSS) -> path -> level buttons -> numbers / stars / locks -> bee + label
+    let html = evImg('path-full.svg', 'ev-path');
+    for (let i = 0; i < N; i++) {
+      const [x, y] = EV_POS[i], st = i < done ? 'done' : i === done ? 'current' : 'locked';
+      const stars = st === 'done' ? `<span class="ev-stars">${[0, 1, 2].map((k) => evImg('star-filled.png', k < E.levels[i] ? '' : 'off')).join('')}</span>` : '';
+      html += `<button class="ev-lvl ${st}" style="${at(x, y)}" data-action="event-level" data-i="${i}" aria-label="Event level ${i + 1}">
+        ${st === 'locked' ? evImg('lock-icon.png', 'ev-lk') : ''}<b class="num">${i + 1}</b>${stars}</button>`;
     }
-    html += `<img class="ev-deco" src="assets/sprites/pumpkin.png" alt="" style="left:2px;top:40%">
-      <img class="ev-deco" src="assets/sprites/pumpkin.png" alt="" style="right:2px;bottom:6px;width:34px">`;
+    // the bee marks the next level to play (hidden once all 12 are won); its label goes toward the map centre
+    if (done < N) {
+      const [x, y] = EV_POS[done], side = x > 450 ? -1 : 1;
+      html += `<div class="ev-bee" style="${at(x, y - 122)}">${evImg('bee-marker.png')}</div>
+        <div class="ev-here" style="${at(x + side * 160, y - 130)}">YOU ARE HERE</div>`;
+    }
+    html += evImg('pumpkin-decoration.png', 'ev-deco l') + evImg('pumpkin-decoration.png', 'ev-deco r');
     $('event-map').innerHTML = html;
-    // pumpkin bar + rewards
-    const max = EVENT_REWARDS[EVENT_REWARDS.length - 1].at;
-    $('ev-bar').style.width = Math.min(100, (E.pumpkins / max) * 100) + '%';
+    // pumpkins bar (the fill is clipped, not squeezed) + the five rewards
+    const max = EVENT_REWARDS[EVENT_REWARDS.length - 1].at, pct = Math.min(100, (E.pumpkins / max) * 100);
+    $('ev-bar').style.clipPath = `inset(0 ${100 - pct}% 0 0 round 999px)`;
     $('ev-count').textContent = `${E.pumpkins}/${max}`;
-    $('event-rewards').innerHTML = EVENT_REWARDS.map((rw, i) => {
-      const claimed = E.claimedRewards.includes(i), ready = !claimed && E.pumpkins >= rw.at;
-      return `<div class="evr ${claimed ? 'done' : ready ? 'ready' : ''}">
-        <button data-action="event-reward" data-i="${i}" aria-label="Reward at ${rw.at} pumpkins">${img(rw.icon)}
-          ${claimed ? '<b class="check"></b>' : ready ? '' : img('icon_lock', 'lockb')}</button>
-        <span class="lbl">${rw.label}</span><span class="at">${rw.at}</span></div>`;
+    $('event-rewards').innerHTML = '<i class="ev-conn"></i>' + EVENT_REWARDS.map((rw, i) => {
+      const claimed = E.claimedRewards.includes(i), reached = E.pumpkins >= rw.at, ready = reached && !claimed;
+      const x = 10 + i * 20; // card centres at 90/270/450/630/810 of 900
+      return `<button class="ev-card ${claimed ? 'claimed' : ready ? 'ready' : reached ? '' : 'locked'}" style="left:${x}%"
+          data-action="event-reward" data-i="${i}" aria-label="Reward at ${rw.at} pumpkins">
+          ${evImg(EV_REWARD_ICON[i] + '.png', 'ico')}${reached ? '' : evImg('lock-icon.png', 'lk')}${claimed ? evImg('claimed-check.svg', 'ok') : ''}</button>
+        <span class="ev-amt" style="left:${x}%">${rw.label}</span>
+        <span class="ev-ms ${reached ? 'on' : ''}" style="left:${x}%">${rw.at}</span>`;
     }).join('');
   }
   function startEventLevel(i) {
@@ -2500,6 +2509,10 @@
     // dev: index.html#gallery_demo — a few won levels (incl. 2 event levels), then the Gallery
     gallery_demo: () => { state.progress['flowers-easy'] = [3, 3, 2, 3]; state.progress['flowers-medium'] = [3]; state.event.levels = [3, 2];
       showScreen('collections'); colTab = 'gallery'; colPage = 0; renderCollections(); },
+    // dev: index.html#events_demo — the Events screen with some progress (7 levels won, 70 pumpkins, 2 rewards claimed)
+    events_demo: () => { Object.assign(state.event, { levels: [3, 3, 2, 3, 3, 1, 3], pumpkins: 70, claimedRewards: [0, 1] }); showScreen('events');
+      setTimeout(() => { const box = document.querySelector('#screen-events .ev-scroll'), fit = box.querySelector('.ev-fit'), r = box.getBoundingClientRect(), p = document.querySelector('#screen-events .ev-rpanel').getBoundingClientRect();
+        document.body.dataset.evfit = [innerWidth, innerHeight, fit.style.transform, Math.round(r.bottom), Math.round(p.bottom), box.scrollHeight - box.clientHeight].join(','); }, 1500); },
     // dev: index.html#layout_probe writes the game screen's layout boxes into <body data-rects> (for layout checks)
     layout_probe: () => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'medium', 0);
       setTimeout(() => { const r = (id) => { const b = $(id).getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; };

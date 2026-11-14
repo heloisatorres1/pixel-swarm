@@ -1136,3 +1136,64 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
   .side-btn img { width: 54px; }
   .mascot { width: 120px; }
 }
+
+/* ===================== EVENTS screen (assets/events; layout from its CLAUDE-ASSEMBLY.md, 900-wide design) ===================== */
+.ev-head { display: flex; align-items: center; gap: 8px; padding: 4px 10px; margin-bottom: 8px; border-radius: 18px;
+  background: linear-gradient(#fffaf0, #f7e6c8); border: 2px solid #e6c48c; box-shadow: inset 0 2px 0 #fff; }
+.ev-head img { width: 40px; flex: none; }
+.ev-head p { flex: 1; margin: 0; font: 400 15px/1.1 "Lilita One"; color: #4a2810; }
+.ev-head .ev-timer { position: static; transform: none; width: auto; min-width: 0; height: auto; flex: none; padding: 3px 8px;
+  border-radius: 12px; background: #4a2810; color: #fff; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+.ev-head .ev-timer .clock { border-color: #fff; } .ev-head .ev-timer .clock::after { background: #fff; box-shadow: 2px 3px 0 0 #fff; }
+/* map: background -> path -> level buttons -> numbers/stars/locks -> bee + label */
+.ev-map2 { position: relative; width: 100%; aspect-ratio: 900 / 1125; container-type: inline-size; border-radius: 16px;
+  background: url(../assets/events/map-background.jpg) center / 100% 100% no-repeat; }
+.ev-path { position: absolute; left: 0; top: 5.556%; width: 100%; height: 88.889%; pointer-events: none; }
+.ev-lvl { position: absolute; width: 21%; aspect-ratio: 256 / 224; transform: translate(-50%, -50%); padding: 0; border: 0;
+  background: center / 100% 100% no-repeat; container-type: inline-size; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ev-lvl.done { background-image: url(../assets/events/level-completed.png); }
+.ev-lvl.current { background-image: url(../assets/events/level-current.png); animation: evpulse 1.6s ease-in-out infinite; }
+.ev-lvl.locked { background-image: url(../assets/events/level-locked.png); }
+@keyframes evpulse { 50% { transform: translate(-50%, -50%) scale(1.06); } }
+.ev-lvl .num { font: 400 32cqw/1 "Lilita One"; color: #fff; paint-order: stroke fill; -webkit-text-stroke: 7cqw #5a2e0c; }
+.ev-lvl.locked .num { -webkit-text-stroke-color: #3a4a30; }
+.ev-lvl .ev-lk { width: 20cqw; margin-bottom: 1cqw; }
+.ev-stars { display: flex; gap: 1cqw; margin-top: 1cqw; }
+.ev-stars img { width: 17cqw; } .ev-stars img.off { filter: grayscale(1) brightness(1.5); opacity: .45; }
+.ev-bee { position: absolute; width: 13%; transform: translate(-50%, -50%); pointer-events: none; animation: evbob 1.4s ease-in-out infinite; }
+.ev-bee img { width: 100%; display: block; filter: drop-shadow(0 3px 2px rgba(0,0,0,.3)); }
+@keyframes evbob { 50% { transform: translate(-50%, -58%); } }
+.ev-here { position: absolute; width: 24%; aspect-ratio: 480 / 180; transform: translate(-50%, -50%); pointer-events: none; padding-bottom: 1%;
+  background: url(../assets/events/location-label.png) center / 100% 100% no-repeat; display: grid; place-items: center;
+  font: 400 3.3cqw "Lilita One"; color: #4a2810; white-space: nowrap; }
+.ev-deco { position: absolute; bottom: -1%; width: 15%; pointer-events: none; }
+.ev-deco.l { left: -2%; } .ev-deco.r { right: -2%; transform: scaleX(-1); }
+/* "Event Rewards" plaque, overlapping the map's bottom edge like the concept */
+.ev-ribbon { position: relative; z-index: 2; width: 58%; aspect-ratio: 640 / 192; margin: -6% auto -3%; display: grid; place-items: center;
+  background: url(../assets/events/rewards-ribbon.png) center / 100% 100% no-repeat; }
+.ev-ribbon span { font: 400 19px "Lilita One"; color: #fff3d6; paint-order: stroke fill; -webkit-text-stroke: 5px #5a2e0c; }
+/* rewards panel (900x500 design): bar at x110 y38 w740 h52, cards at x90..810 y215, amounts y315, milestones y405 */
+.ev-rpanel { position: relative; width: 100%; aspect-ratio: 900 / 500; container-type: inline-size;
+  background: url(../assets/events/reward-panel.png) center / 100% 100% no-repeat; }
+.ev-rpumpkin { position: absolute; left: 6%; top: 12.8%; width: 9%; transform: translate(-50%, -50%); }
+.ev-track { position: absolute; left: 12.2%; top: 7.6%; width: 82.2%; height: 10.4%;
+  background: url(../assets/events/progress-track.svg) center / 100% 100% no-repeat; }
+.ev-fill { position: absolute; inset: 0; background: url(../assets/events/progress-fill.svg) center / 100% 100% no-repeat; }
+.ev-track b { position: absolute; inset: 0; display: grid; place-items: center; font: 400 3.6cqw "Lilita One"; color: #fff;
+  paint-order: stroke fill; -webkit-text-stroke: 1cqw #3a1d08; }
+.ev-conn { position: absolute; left: 10%; right: 10%; top: 81%; height: 2.2%; transform: translateY(-50%);
+  background: url(../assets/events/reward-connector.svg) center / 100% 100% no-repeat; }
+.ev-card { position: absolute; top: 43%; width: 16%; aspect-ratio: 1; transform: translate(-50%, -50%); padding: 0; border: 0;
+  background: url(../assets/events/reward-card.png) center / 100% 100% no-repeat; }
+.ev-card.locked { background-image: url(../assets/events/reward-card-locked.png); }
+.ev-card .ico { position: absolute; left: 50%; top: 50%; width: 62%; transform: translate(-50%, -50%); }
+.ev-card.locked .ico { filter: saturate(.6); opacity: .85; }
+.ev-card .lk { position: absolute; right: -8%; top: -10%; width: 34%; }
+.ev-card .ok { position: absolute; right: -6%; bottom: -6%; width: 36%; }
+.ev-card.ready { animation: evready 1.2s ease-in-out infinite; }
+@keyframes evready { 50% { transform: translate(-50%, -50%) scale(1.08); filter: drop-shadow(0 0 8px #ffe066); } }
+.ev-amt { position: absolute; top: 63%; transform: translate(-50%, -50%); font: 400 3.4cqw "Lilita One"; color: #fff; white-space: nowrap;
+  paint-order: stroke fill; -webkit-text-stroke: 1cqw #5a2e0c; }
+.ev-ms { position: absolute; top: 81%; width: 8%; aspect-ratio: 1; transform: translate(-50%, -50%); display: grid; place-items: center;
+  background: url(../assets/events/milestone-locked.svg) center / 100% 100% no-repeat; font: 400 3cqw "Lilita One"; color: #5a2e0c; }
+.ev-ms.on { background-image: url(../assets/events/milestone-reached.svg); color: #fff; paint-order: stroke fill; -webkit-text-stroke: .8cqw #3d6a10; }

@@ -317,18 +317,18 @@
       <div class="screen-title top"><div class="ribbon inline"><h2>Events</h2></div>
         <button class="close-btn" data-action="home" aria-label="Close">X</button></div>
       <div class="frame-panel event-panel">
-        <!-- banner art (assets/bg/event_halloween.jpg) with a live countdown on top -->
-        <div class="ev-banner"><span class="ev-timer"><i class="clock"></i>Ends in <b id="ui-event-ends">3d 6h</b></span></div>
         <div class="panel-inner ev-scroll">
           <div class="ev-fit"> <!-- shrunk by fitEvents() if a short phone can't show everything: no scrolling -->
-          <div class="ev-info"><img src="assets/sprites/pumpkin.png" alt=""><p>Play special levels, collect pumpkins and earn exclusive rewards!</p></div>
-          <!-- 12 event levels on a winding path (filled by renderEvents) -->
-          <div class="ev-map" id="event-map"></div>
-          <div class="sub-ribbon small">Event Rewards</div>
-          <div class="ev-rewards-box">
-            <div class="ev-progress"><img src="assets/sprites/pumpkin.png" alt=""><div class="bar big"><i id="ev-bar"></i><span id="ev-count">0/120</span></div></div>
-            <div class="ev-rewards" id="event-rewards"></div>
-          </div>
+            <!-- event art: assets/events (map, path, level buttons, bee marker, rewards panel). Numbers and labels are live text. -->
+            <div class="ev-head"><img src="assets/events/pumpkin-decoration.png" alt=""><p>Collect pumpkins. Unlock rewards!</p>
+              <span class="ev-timer"><i class="clock"></i><b id="ui-event-ends">3d 6h</b></span></div>
+            <div class="ev-map2" id="event-map"></div>
+            <div class="ev-ribbon"><span>Event Rewards</span></div>
+            <div class="ev-rpanel">
+              <img class="ev-rpumpkin" src="assets/events/pumpkin-decoration.png" alt="">
+              <div class="ev-track"><i class="ev-fill" id="ev-bar"></i><b id="ev-count">0/120</b></div>
+              <div id="event-rewards"></div>
+            </div>
           </div>
         </div>
       </div>
