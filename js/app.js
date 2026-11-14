@@ -824,7 +824,7 @@
   const galleryImgs = new Map();
   function galleryImg(e) { // the level's real picture (its size and background for that difficulty)
     const key = `${e.theme}-${e.diff}-${e.index}`;
-    if (!galleryImgs.has(key)) { const g = D.levelGrid(D.levelPicture(e.theme, e.diff, e.index), e.diff); galleryImgs.set(key, D.gridURL(g, Math.max(4, Math.round(160 / g[0].length)))); }
+    if (!galleryImgs.has(key)) { const g = D.levelGrid(D.levelPicture(e.theme, e.diff, e.index), e.diff); galleryImgs.set(key, D.gridURL(g, Math.max(4, Math.round(160 / g[0].length)), 0)); }
     return galleryImgs.get(key);
   }
   let colTab = 'gallery', colPage = 0;

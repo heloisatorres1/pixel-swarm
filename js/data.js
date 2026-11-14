@@ -138,13 +138,14 @@ window.PS_DATA = (function () {
   // Draws a picture to a canvas and returns a data URL (cached). Gaps between pixels give the mosaic look.
   const cache = {};
   function pictureURL(id, cell = 10, opts = {}) {
-    const key = id + cell + (opts.silhouette ? 's' : '');
+    // silhouettes are solid shapes (no gaps between pixels: they turn into uneven lines when the image is shrunk)
+    const gap = opts.gap !== undefined ? opts.gap : opts.silhouette ? 0 : Math.max(1, Math.round(cell / 10));
+    const key = id + cell + (opts.silhouette ? 's' : '') + 'g' + gap;
     if (cache[key]) return cache[key];
     const grid = PICTURES[id].grid, h = grid.length, w = grid[0].length;
     const c = document.createElement('canvas');
     c.width = w * cell; c.height = h * cell;
     const ctx = c.getContext('2d');
-    const gap = Math.max(1, Math.round(cell / 10));
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const ch = grid[y][x];
       if (ch === '.' || !PALETTE[ch]) continue;
@@ -275,10 +276,11 @@ window.PS_DATA = (function () {
     return (gridCache[key] = addBackground(picture, themeOfPicture(picId), d.bgBands));
   }
   // draws any grid (used for the bigger level pictures)
-  function gridURL(grid, cell) {
+  // gap = space between pixels (0 for small thumbnails: shrunk gaps look like uneven lines)
+  function gridURL(grid, cell, gap = Math.max(1, Math.round(cell / 10))) {
     const c = document.createElement('canvas');
     c.width = grid[0].length * cell; c.height = grid.length * cell;
-    const ctx = c.getContext('2d'), gap = Math.max(1, Math.round(cell / 10));
+    const ctx = c.getContext('2d');
     grid.forEach((row, y) => [...row].forEach((ch, x) => {
       if (!PALETTE[ch]) return;
       ctx.fillStyle = PALETTE[ch]; ctx.fillRect(x * cell, y * cell, cell - gap, cell - gap);
