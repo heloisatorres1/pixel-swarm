@@ -150,10 +150,15 @@ window.PSRender = (function () {
   }
 
   // ---------- bugs ----------
-  function spawnBee(textureUrl, size, carryColor, carrySize) {
+  // load sprites in the background (e.g. the bug look chosen in the Skins screen)
+  function preload(urls) { if (app) PIXI.Assets.load(urls).catch(() => {}); }
+  // fallbackUrl: used while textureUrl is still loading
+  function spawnBee(textureUrl, size, carryColor, carrySize, fallbackUrl) {
     if (!app) return NO_BEE;
+    const tex = PIXI.Assets.get(textureUrl) || (fallbackUrl && PIXI.Assets.get(fallbackUrl));
+    if (!tex) { preload([textureUrl]); return NO_BEE; }
     const c = new PIXI.Container();
-    const body = new PIXI.Sprite(PIXI.Texture.from(textureUrl));
+    const body = new PIXI.Sprite(tex);
     body.anchor.set(0.5);
     const k = size / Math.max(body.texture.width, body.texture.height);
     body.scale.set(k);
@@ -210,5 +215,5 @@ window.PSRender = (function () {
     });
   }
 
-  return { init, frame, resize, setBoard, syncBoard, spawnBee, clearBees, wind, get ready() { return !!app; } };
+  return { init, preload, frame, resize, setBoard, syncBoard, spawnBee, clearBees, wind, get ready() { return !!app; } };
 })();
