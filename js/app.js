@@ -811,20 +811,37 @@
     { title: 'Daily Rewards',   icon: 'icon_activities', value: () => state.stats.daily },
     { title: 'Bugs Collected',  icon: 'bee',             value: () => state.ownedSkins.length },
     { title: 'Event Wins',      icon: 'icon_events',     value: () => state.stats.eventWins },
-    { title: 'Pictures Done',   icon: 'icon_collections', value: () => state.gallery.length },
+    { title: 'Pictures Done',   icon: 'icon_collections', value: () => GALLERY.filter(galleryDone).length }, // same count as the Gallery
   ];
-  const COL_PAGE_SIZE = { gallery: 6, achievements: 9, bugs: 12 };
+  const COL_PAGE_SIZE = { gallery: 9, achievements: 9, bugs: 12 };
+  // GALLERY: one card per level — every theme level (Easy, Medium, Hard) and every event level
+  const GALLERY = [
+    ...D.THEMES.flatMap((t) => D.DIFFICULTIES.flatMap((d) => [...Array(D.LEVELS_PER_DIFFICULTY).keys()].map((i) => ({
+      theme: t.id, diff: d, index: i, label: `${t.name} ${cap(d)} ${i + 1}` })))),
+    ...[...Array(D.EVENT.levels).keys()].map((i) => ({ theme: D.EVENT.id, diff: D.eventDiff(i), index: i, label: `${D.EVENT.name} ${i + 1}`, event: true })),
+  ];
+  const galleryDone = (e) => (e.event ? state.event.levels : state.progress[`${e.theme}-${e.diff}`] || []).length > e.index;
+  const galleryImgs = new Map();
+  function galleryImg(e) { // the level's real picture (its size and background for that difficulty)
+    const key = `${e.theme}-${e.diff}-${e.index}`;
+    if (!galleryImgs.has(key)) { const g = D.levelGrid(D.levelPicture(e.theme, e.diff, e.index), e.diff); galleryImgs.set(key, D.gridURL(g, Math.max(4, Math.round(160 / g[0].length)))); }
+    return galleryImgs.get(key);
+  }
   let colTab = 'gallery', colPage = 0;
   function renderCollections() {
     document.querySelectorAll('#screen-collections .tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === colTab)));
     let items, html, counter;
     if (colTab === 'gallery') {
-      items = Object.keys(D.PICTURES);
-      counter = `Completed ${state.gallery.length}/${items.length}`;
-      html = (page) => `<div class="grid2">${page.map((id) => state.gallery.includes(id)
-        ? `<div class="pic-card"><img src="${D.pictureURL(id, 10)}" alt=""><span class="name">${D.PICTURES[id].name}</span>
-            <button class="mini-btn" data-action="share" data-pic="${id}">Share</button></div>`
-        : `<div class="pic-card locked"><img src="${D.pictureURL(id, 10, { silhouette: true })}" alt=""><span class="name">???</span></div>`).join('')}</div>`;
+      items = GALLERY;
+      counter = `Completed ${items.filter(galleryDone).length}/${items.length}`;
+      html = (page) => `<div class="grid3x gallery">${page.map((e) => {
+        const pic = D.levelPicture(e.theme, e.diff, e.index);
+        return galleryDone(e)
+          ? `<div class="pic-card ${e.event ? 'event' : ''}"><img src="${galleryImg(e)}" alt=""><span class="name">${D.PICTURES[pic].name}</span>
+              <span class="gal-lvl">${e.label}</span><button class="mini-btn" data-action="share" data-pic="${pic}">Share</button></div>`
+          : `<div class="pic-card locked ${e.event ? 'event' : ''}"><img src="${D.pictureURL(pic, 10, { silhouette: true })}" alt=""><span class="name">???</span>
+              <span class="gal-lvl">${e.label}</span></div>`;
+      }).join('')}</div>`;
     } else if (colTab === 'achievements') {
       items = ACHIEVEMENTS;
       counter = `Levels won: ${state.stats.levels.toLocaleString('en-US')}`;
@@ -1046,7 +1063,8 @@
   // tidy the line: open locks whose key was found, and pipes at the front push their next block up
   function settle(g) {
     g.cols.forEach((col, c) => {
-      g.cols[c] = col = col.filter((it) => !(it.kind === 'lock' && g.unlocked.has(it.id)));
+      // (a lock whose key is still flying to it stays until the animation ends: g.opening, game only)
+      g.cols[c] = col = col.filter((it) => !(it.kind === 'lock' && g.unlocked.has(it.id) && !(g.opening && g.opening.has(it.id))));
       while (col[0] && col[0].kind === 'pipe') {
         const p = col[0];
         if (!p.items.length) { col.shift(); continue; }
@@ -1302,7 +1320,7 @@
     // slotPlace says where each slot is drawn: 'main' row, or 'ad0' / 'ad1' (an AD slot opened by the player)
     const lvl = applyBoard({ theme, diff, index, picId, grid, cfg, cells, cols, puzzles,
       slots: Array(cfg.slots).fill(null), slotPlace: Array(cfg.slots).fill('main'),
-      speed: 1, bees: [], reserved: new Set(), pending: new Map(), // every level starts at normal speed
+      speed: 1, bees: [], reserved: new Set(), pending: new Map(), opening: new Set(), // every level starts at normal speed
       remaining: total2, extras: 0, mode: null, over: false, last: 0, launchTimer: 0 }, plan);
     settle(lvl);
     return lvl;
@@ -1386,7 +1404,7 @@
       const [x, y] = at(grp.cells[0]), S = Math.round(Math.sqrt(grp.cells.length));
       items.push({ kind: 'big', x, y, w: S, h: S, color: D.PALETTE[g.cells[y][x]], text: String(grp.left) });
     });
-    g.keyGroups.forEach((q) => { if (!q.got) items.push({ kind: 'keycell', tex: 'key', ...box(q.cells) }); });
+    g.keyGroups.forEach((q) => { if (!q.got || (g.opening.has(q.id) && !q.flying)) items.push({ kind: 'keycell', tex: 'key', ...box(q.cells) }); });
     return {
       color: (k, ch) => ch || g.pending.get(k) || null, // pixels a bee is flying to stay visible until it takes them
       hide: (k) => g.cover.has(k) || g.big.has(k),
@@ -1525,7 +1543,7 @@
   function blockHtml(b, attrs = '', cls = '', revealed = true) {
     const pz = (name) => `<img class="pz-img" src="assets/sprites/puzzles/${name}.png" alt="">`;
     // line puzzle tiles
-    if (b.kind === 'lock') return `<button class="block pz-tile lock ${cls}" ${attrs} aria-label="Lock">${pz('lock_closed')}</button>`;
+    if (b.kind === 'lock') return `<button class="block pz-tile lock ${cls}" ${attrs} data-lock="${b.id}" aria-label="Lock">${pz('lock_closed')}</button>`;
     if (b.kind === 'hammer') return `<button class="block pz-tile hammer ${cls}" ${attrs} aria-label="Hammer">${pz('hammer')}</button>`;
     // pipe (like the reference): a tube whose open collar faces UP, where its next block pops out
     if (b.kind === 'pipe') return `<button class="block pz-tile pipe ${cls}" ${attrs} aria-label="Pipe"><i class="pz-collar"><i class="pz-arrow"></i></i><b class="pz-count">${b.items.length}</b></button>`;
@@ -1763,6 +1781,7 @@
           // the pixel counts as eaten from the moment its bee leaves (same order as the level checker, so
           // puzzles like the cookie or the hammer react exactly as planned); it stays drawn until the bee takes it
           const ev = eatPixel(g, t.key);
+          (ev.keyIds || []).forEach((id) => g.opening.add(id)); // the key flies to its lock when this bug arrives
           state.stats.pixels += 1; // (saved with the next save)
           const pend = ev.cells || [t.key];
           pend.forEach((k) => g.pending.set(k, b.color)); b.amount -= 1; b.inFlight += 1;
@@ -1809,9 +1828,54 @@
   // what the player sees when a bee (or the Wind) triggers a puzzle
   function puzzleEvents(ev) {
     if (!ev.length) return;
-    if (ev.includes('key')) { toast('🔑 Key collected! A lock opened'); settle(game); renderQueue(); }
+    if (ev.includes('key')) (ev.keyIds || []).forEach((id) => { game.opening.add(id); animateKey(id); });
     if (ev.includes('cookie')) toast('🍪 Crunch! The cookie broke');
     if (ev.some((e) => e !== 'big') && state.settings.haptics) PSNative.vibrate('medium');
+  }
+  // KEY ANIMATION: the key lifts off its nest in the picture, flies in an arc to its padlock in the line,
+  // then the padlock opens (lock_open sprite), wiggles and pops away; only then does the column move up.
+  function animateKey(id) {
+    const g = game, q = g.keyGroups.find((k) => k.id === id);
+    const finish = () => { if (game !== g) return; g.opening.delete(id); settle(g); renderQueue(); drawBoard(); };
+    if (!q) return finish();
+    const scr = $('screen-game').getBoundingClientRect(), cv = $('g-board').getBoundingClientRect(), W = g.cells[0].length, cs = cv.width / W;
+    const xs = q.cells.map((k) => k % W), ys = q.cells.map((k) => (k / W) | 0);
+    const sx = cv.left - scr.left + ((Math.min(...xs) + Math.max(...xs) + 1) / 2) * cs, sy = cv.top - scr.top + ((Math.min(...ys) + Math.max(...ys) + 1) / 2) * cs;
+    const lockEl = document.querySelector(`#g-queue .block.lock[data-lock="${id}"]`);
+    // lock not in view (deeper in the line): fly to the line and just open it
+    const tr = (lockEl || $('g-queue')).getBoundingClientRect();
+    const tx = tr.left - scr.left + tr.width / 2, ty = tr.top - scr.top + (lockEl ? tr.height / 2 : tr.height);
+    q.flying = true; drawBoard();
+    const key = document.createElement('img');
+    key.src = 'assets/sprites/puzzles/key.png'; key.className = 'key-fly'; key.alt = '';
+    Object.assign(key.style, { left: sx + 'px', top: sy + 'px' });
+    $('screen-game').appendChild(key);
+    // flight path: pops up out of the nest, then a curve over to the lock (frame by frame, like the game loop)
+    const cx = (sx + tx) / 2, cy = Math.min(sy, ty) - 60, DUR = 900, t0 = performance.now();
+    const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+    const frame = () => {
+      const frozen = window.__keyAt; // dev: freeze the flight at this point (0..1) for screenshots
+      const p = frozen !== undefined ? frozen : Math.min(1, (performance.now() - t0) / DUR);
+      let x, y, sc;
+      if (p < 0.2) { const k = p / 0.2; x = sx; y = sy - 26 * k; sc = 0.6 + 0.65 * k; }       // pops out of its nest
+      else { const k = ease((p - 0.2) / 0.8), q1 = 1 - k, y0 = sy - 26;
+        x = q1 * q1 * sx + 2 * q1 * k * cx + k * k * tx; y = q1 * q1 * y0 + 2 * q1 * k * cy + k * k * ty; sc = 1.25 - 0.4 * k; }
+      key.style.transform = `translate(${x - sx}px, ${y - sy}px) scale(${sc}) rotate(${p * 360}deg)`;
+      key.style.opacity = String(Math.min(1, 0.4 + p * 3));
+      if (frozen !== undefined) return;
+      if (p < 1) setTimeout(frame, 16); else landed();
+    };
+    frame();
+    const landed = () => {
+      key.remove();
+      const el = document.querySelector(`#g-queue .block.lock[data-lock="${id}"]`); // (the line may have re-rendered)
+      if (!el || game !== g) return finish();
+      const im = el.querySelector('img'); if (im) im.src = 'assets/sprites/puzzles/lock_open.png';
+      el.classList.add('unlocking');
+      if (state.settings.haptics) PSNative.vibrate('medium');
+      toast('🔓 Unlocked!');
+      setTimeout(finish, 650);
+    };
   }
   function endLevel(win) {
     game.over = true;
@@ -2421,6 +2485,21 @@
     // dev: index.html#achievements opens Collections on the Achievements tab (with some sample stats)
     achievements: () => { Object.assign(state.stats, { levels: 12, firstTry: 7, perfect: 5, hard: 2, pixels: 4321, boosters: 3, coinsEarned: 560, daily: 4 });
       showScreen('collections'); colTab = 'achievements'; colPage = 0; renderCollections(); },
+    // dev: index.html#keyanim — a key level where the key is collected right away (to watch the animation)
+    ...Object.fromEntries([15, 45, 75, 95].map((n) => [`keyanim_${n}`, () => { window.__keyAt = n / 100; ACTIONS.keyanim(); }])),
+    keyanim: () => {
+      state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'hard', 1, { puzzles: ['key'] });
+      const g = game, q = g.keyGroups[0]; if (!q) return;
+      g.cols[0].unshift({ kind: 'lock', id: q.id }); renderQueue(); // its lock at the front so it's in view
+      const W = g.cells[0].length, kx = q.cells[0] % W, ky = (q.cells[0] / W) | 0, ev = [];
+      ev.keyIds = [];
+      for (let y = g.cells.length - 1; y > ky; y--) if (g.cells[y][kx]) { const e = eatPixel(g, y * W + kx); ev.push(...e); ev.keyIds.push(...(e.keyIds || [])); }
+      (ev.keyIds).forEach((id) => g.opening.add(id)); drawBoard();
+      setTimeout(() => puzzleEvents(ev), 300);
+    },
+    // dev: index.html#gallery_demo — a few won levels (incl. 2 event levels), then the Gallery
+    gallery_demo: () => { state.progress['flowers-easy'] = [3, 3, 2, 3]; state.progress['flowers-medium'] = [3]; state.event.levels = [3, 2];
+      showScreen('collections'); colTab = 'gallery'; colPage = 0; renderCollections(); },
     // dev: index.html#layout_probe writes the game screen's layout boxes into <body data-rects> (for layout checks)
     layout_probe: () => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'medium', 0);
       setTimeout(() => { const r = (id) => { const b = $(id).getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; };
