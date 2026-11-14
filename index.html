@@ -320,6 +320,7 @@
         <!-- banner art (assets/bg/event_halloween.jpg) with a live countdown on top -->
         <div class="ev-banner"><span class="ev-timer"><i class="clock"></i>Ends in <b id="ui-event-ends">3d 6h</b></span></div>
         <div class="panel-inner ev-scroll">
+          <div class="ev-fit"> <!-- shrunk by fitEvents() if a short phone can't show everything: no scrolling -->
           <div class="ev-info"><img src="assets/sprites/pumpkin.png" alt=""><p>Play special levels, collect pumpkins and earn exclusive rewards!</p></div>
           <!-- 12 event levels on a winding path (filled by renderEvents) -->
           <div class="ev-map" id="event-map"></div>
@@ -327,6 +328,7 @@
           <div class="ev-rewards-box">
             <div class="ev-progress"><img src="assets/sprites/pumpkin.png" alt=""><div class="bar big"><i id="ev-bar"></i><span id="ev-count">0/120</span></div></div>
             <div class="ev-rewards" id="event-rewards"></div>
+          </div>
           </div>
         </div>
       </div>

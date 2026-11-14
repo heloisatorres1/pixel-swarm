@@ -250,7 +250,7 @@
     if (name === 'themes') renderThemes();
     if (name === 'theme') renderThemeLevels();
     if (name === 'collections') renderCollections();
-    if (name === 'events') renderEvents();
+    if (name === 'events') { renderEvents(); fitEvents(); setTimeout(fitEvents, 300); }
     document.querySelectorAll('.screen.active .panel-inner').forEach((p) => { p.scrollTop = 0; });
   }
 
@@ -852,6 +852,17 @@
     if (navigator.share) navigator.share({ title: 'Pixel Swarm', text }).catch(() => {});
     else copyText(text, 'Copied — paste it to share!');
   }
+
+  // The whole Events screen must fit without scrolling: if the content is taller than the panel, shrink it to fit.
+  function fitEvents() {
+    const box = document.querySelector('#screen-events .ev-scroll'), fit = box && box.querySelector('.ev-fit');
+    if (!fit || !box.clientHeight) return;
+    fit.style.zoom = 1;
+    const cs = getComputedStyle(box), have = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const need = fit.offsetHeight;
+    fit.style.zoom = need > have ? (have / need).toFixed(3) : 1;
+  }
+  window.addEventListener('resize', () => { if (currentScreen === 'events') fitEvents(); });
 
   // =====================================================================
   //  EVENTS (Halloween Hunt)

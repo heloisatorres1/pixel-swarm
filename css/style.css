@@ -503,20 +503,21 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
   font-weight: 700; font-size: 13px; color: #4a2810; white-space: nowrap; }
 .ev-timer .clock { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #4a2810; position: relative; }
 .ev-timer .clock::after { content: ""; position: absolute; left: 4px; top: 1px; width: 2px; height: 5px; background: #4a2810; box-shadow: 2px 3px 0 -0px #4a2810; }
-.ev-scroll { padding: 10px 8px; }
-.ev-info { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 16px; background: #fff3dc; border: 2px solid #eac38a; margin-bottom: 10px; }
-.ev-info img { width: 46px; } .ev-info p { margin: 0; font-weight: 700; font-size: 13px; color: #4a2810; }
-.ev-map { position: relative; padding: 16px 6px 12px; border-radius: 18px; overflow: hidden;
+.ev-scroll { padding: 8px 8px 6px; overflow: hidden; }
+.ev-fit { transform-origin: top center; }
+.ev-info { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 16px; background: #fff3dc; border: 2px solid #eac38a; margin-bottom: 6px; }
+.ev-info img { width: 36px; } .ev-info p { margin: 0; font-weight: 700; font-size: 13px; color: #4a2810; }
+.ev-map { position: relative; padding: 10px 6px 8px; border-radius: 18px; overflow: hidden;
   background: radial-gradient(circle at 20% 15%, #9be04a 0, transparent 40%), radial-gradient(circle at 85% 80%, #8fd44a 0, transparent 40%), linear-gradient(#7cc43e, #5fae26);
   box-shadow: inset 0 3px 8px rgba(0,0,0,.25); }
 .ev-deco { position: absolute; width: 40px; opacity: .95; pointer-events: none; }
 .ev-row { position: relative; display: flex; justify-content: space-around; align-items: center; }
 .ev-row::before { content: ""; position: absolute; left: 17%; right: 17%; top: 50%; height: 12px; margin-top: -6px; border-radius: 8px;
   background: #f2cf8a; box-shadow: inset 0 2px 0 rgba(0,0,0,.15); }
-.ev-turn { position: relative; height: 22px; }
+.ev-turn { position: relative; height: 12px; }
 .ev-turn::before { content: ""; position: absolute; top: -6px; bottom: -6px; width: 12px; border-radius: 8px; background: #f2cf8a; }
 .ev-turn.right::before { right: 14.5%; } .ev-turn.left::before { left: 14.5%; }
-.ev-node { position: relative; z-index: 1; width: 78px; height: 62px; border-radius: 50% / 46%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+.ev-node { position: relative; z-index: 1; width: 74px; height: 56px; border-radius: 50% / 46%; display: flex; flex-direction: column; align-items: center; justify-content: center;
   background: radial-gradient(circle at 50% 30%, #ffe680, #ffb21c 70%, #e08600); border: 3px solid #a35a00; box-shadow: inset 0 3px 0 rgba(255,255,255,.55), 0 4px 0 #8a4a00;
   font: 400 26px/1 "Lilita One"; color: #fff; paint-order: stroke fill; -webkit-text-stroke: 5px #7a3c00; }
 .ev-node .stars { font-size: 13px; margin-top: 1px; }
@@ -524,9 +525,9 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .ev-node.locked { background: radial-gradient(circle at 50% 30%, #c8c8c8, #8a8a8a 75%); border-color: #4a4a4a; box-shadow: inset 0 3px 0 rgba(255,255,255,.4), 0 4px 0 #3a3a3a;
   -webkit-text-stroke-color: #3a3a3a; font-size: 20px; }
 .ev-node.locked img { width: 20px; margin-bottom: 1px; }
-.ev-rewards-box { padding: 12px 8px 8px; border-radius: 18px; background: #fff3dc; border: 2px solid #eac38a; }
-.ev-progress { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
-.ev-progress img { width: 48px; } .ev-progress .bar { flex: 1; }
+.ev-rewards-box { padding: 8px 8px 4px; border-radius: 18px; background: #fff3dc; border: 2px solid #eac38a; }
+.ev-progress { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.ev-progress img { width: 38px; } .ev-progress .bar { flex: 1; }
 .ev-rewards { position: relative; display: flex; justify-content: space-between; padding-bottom: 6px; }
 .ev-rewards::after { content: ""; position: absolute; left: 10%; right: 10%; bottom: 18px; height: 8px; border-radius: 6px; background: #6e4420; z-index: 0; }
 .evr { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; width: 19%; }
