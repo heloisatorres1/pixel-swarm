@@ -17,6 +17,22 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* ---------- Safe areas (notches, rounded corners, status and navigation bars) ----------
+   One set of variables for every screen. On Android the app shell (Capacitor) injects --safe-area-inset-*,
+   browsers provide env(safe-area-inset-*). Debug > Simulate notch fakes a phone's insets on a computer. */
+:root {
+  --sa-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --sa-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --sa-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --sa-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+}
+:root.sim-safe { --sa-top: 54px; --sa-bottom: 34px; --sa-left: 0px; --sa-right: 0px; }
+/* the fake notch and home bar drawn by the simulation */
+:root.sim-safe .phone::before, :root.sim-safe .phone::after { content: ''; position: absolute; z-index: 9999; left: 0; right: 0; pointer-events: none; }
+:root.sim-safe .phone::before { top: 0; height: var(--sa-top); background: rgba(255, 0, 90, .18);
+  box-shadow: inset 0 -1px 0 rgba(255, 0, 90, .7); }
+:root.sim-safe .phone::after { bottom: 0; height: var(--sa-bottom); background: rgba(255, 0, 90, .18); box-shadow: inset 0 1px 0 rgba(255, 0, 90, .7); }
+
 html, body { margin: 0; height: 100%; }
 body {
   background: #1c1209 radial-gradient(circle at 50% 30%, #3b2614 0%, #140c05 75%);
@@ -32,11 +48,11 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 }
 
 /* ---------- Phone frame ---------- */
-.phone { position: relative; width: min(100vw, 430px); height: min(100dvh, 932px); overflow: hidden; background: #a6d35a; }
+.phone { --phone-h: min(100dvh, 932px); position: relative; width: min(100vw, 430px); height: var(--phone-h); overflow: hidden; background: #a6d35a; }
 @media (min-width: 500px) and (min-height: 700px) {
   .phone { border-radius: 36px; box-shadow: 0 0 0 10px #0c0703, 0 30px 80px rgba(0,0,0,.6); }
 }
-.screen { position: absolute; inset: 0; display: none; flex-direction: column; padding-bottom: var(--nav-h); }
+.screen { position: absolute; inset: 0; display: none; flex-direction: column; padding-bottom: calc(var(--nav-h) + var(--sa-bottom)); }
 .screen.active { display: flex; }
 .phone { --nav-h: 86px; }
 .phone.no-nav { --nav-h: 0px; }
@@ -51,7 +67,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 
 /* ---------- Top bar ---------- */
 .topbar { position: relative; z-index: 2; display: flex; align-items: flex-start; gap: 6px;
-  padding: max(12px, env(safe-area-inset-top)) 12px 0; }
+  padding: max(12px, calc(var(--sa-top) + 6px)) calc(12px + var(--sa-right)) 0 calc(12px + var(--sa-left)); }
 .profile { display: flex; flex-direction: column; align-items: flex-start; }
 .avatar { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center;
   background: radial-gradient(circle at 50% 40%, var(--wood-light), var(--wood) 70%);
@@ -134,7 +150,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 
 /* ---------- Bottom nav (wood) ---------- */
 /* glossy orange plank that matches the tree trunk in the background */
-.bottom-nav { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; height: var(--nav-h); padding: 0 6px env(safe-area-inset-bottom);
+.bottom-nav { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; height: var(--nav-h); padding: 0 6px var(--sa-bottom);
   border: 4px solid #5a2c0c; border-bottom: 0; border-radius: 26px 26px 0 0;
   background:
     linear-gradient(180deg, rgba(255,255,255,.35) 0, rgba(255,255,255,0) 14px),
@@ -161,7 +177,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
    POP-UPS (shared by Settings, Activities, Profile, Level Complete, …)
    ===================================================================== */
 .overlay { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
-  padding: 70px 14px 24px; background: rgba(25,12,2,.55); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+  padding: max(70px, calc(var(--sa-top) + 60px)) 14px calc(24px + var(--sa-bottom)); background: rgba(25,12,2,.55); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
   animation: fade .2s ease-out; }
 .overlay[hidden] { display: none; }
 @keyframes fade { from { opacity: 0; } }
@@ -240,7 +256,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .gbtn.small span { font-size: 18px; -webkit-text-stroke: 4px #1d5208; }
 
 /* tall pop-ups scroll inside on short phones */
-.popup-body { max-height: calc(100dvh - 120px); overflow-y: auto; scrollbar-width: none; }
+.popup-body { max-height: calc(var(--phone-h) - 120px - var(--sa-top) - var(--sa-bottom)); overflow-y: auto; scrollbar-width: none; }
 .popup-body::-webkit-scrollbar { display: none; }
 
 /* ---------- Tabs (Activities, Collections) ---------- */
@@ -427,7 +443,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .gbtn.blue[disabled] { filter: none; opacity: 1; }
 
 /* ---------- Title row for screens without the currency bar ---------- */
-.screen-title.top { margin-top: max(26px, env(safe-area-inset-top)); height: 70px; }
+.screen-title.top { margin-top: max(26px, calc(var(--sa-top) + 8px)); height: 70px; }
 .screen-title.top .close-btn { right: 12px; top: 6px; }
 
 /* ---------- Collections ---------- */
@@ -625,9 +641,14 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 /* =====================================================================
    GAMEPLAY SCREEN
    ===================================================================== */
-#screen-game { padding-bottom: 0; }
+#screen-game { padding-bottom: var(--sa-bottom); }
+/* the parts around the board keep their size; the board takes the height that is left (after the safe areas),
+   so nothing gets squashed on short screens or phones with a notch */
+#screen-game > .game-top, #screen-game > .board-wrap, #g-adslots, #g-slots, #g-boosters, #g-ad { flex-shrink: 0; }
+/* short screens: fitGameLayout() (js/app.js) shrinks the parts under the board (--gz) and sets the board's room */
+#g-adslots, #g-slots, #g-queue, #g-boosters, #g-ad { zoom: var(--gz, 1); }
 .game-bg { background: #6a9a3a url("../assets/bg/menu.jpg") center 62% / cover no-repeat; }
-.game-top { position: relative; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; padding: max(10px, env(safe-area-inset-top)) 10px 0; }
+.game-top { position: relative; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; padding: max(10px, calc(var(--sa-top) + 6px)) calc(10px + var(--sa-right)) 0 calc(10px + var(--sa-left)); }
 .g-left, .g-right { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 104px; }
 .g-left { align-items: flex-start; } .g-right { align-items: flex-end; }
 .wood-round.small { width: 40px; height: 40px; }
@@ -648,7 +669,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .speed-btn.on img { filter: none; }
 .board-wrap { position: relative; z-index: 2; display: flex; justify-content: center; padding: 8px 16px 0; }
 /* board background = PALETTE.Z in js/data.js (a mossy green no pixel color is close to) */
-.board { width: min(100%, 300px); aspect-ratio: 1; padding: 14px; border-radius: 26px; display: grid; place-items: center;
+.board { width: max(150px, min(100%, 300px, var(--board-max, 300px))); aspect-ratio: 1; padding: 14px; border-radius: 26px; display: grid; place-items: center;
   background: radial-gradient(circle at 50% 40%, #36603f, #30543c 70%); border: 5px solid #e9c48e; box-shadow: 0 0 0 4px #c9762c, 0 8px 0 4px #7a3a10, 0 14px 20px rgba(0,0,0,.3); }
 .board canvas { display: block; image-rendering: pixelated; } /* exact size set by layoutBoard() */
 /* PixiJS gameplay layer (js/pixi-render.js): draws the pixels, bugs and wind over the HTML game screen.
@@ -659,7 +680,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .board.walled { border: 10px solid #8a5226; padding: 10px;
   box-shadow: 0 0 0 4px #4d2a0e, inset 0 0 0 4px #c98a4a, inset 0 0 0 7px #6e3410, 0 8px 0 4px #4d2a0e, 0 14px 20px rgba(0,0,0,.3);
   background: #30543c; }
-.hole-zone { flex: 1; min-height: 40px; }
+.hole-zone { flex: 1; min-height: 20px; }
 .slots { position: relative; z-index: 2; display: flex; justify-content: center; gap: 6px; padding: 0 10px; }
 .slot { width: 58px; height: 58px; border-radius: 14px; display: grid; place-items: center; background: #fffaf0; border: 4px solid #8a5226; box-shadow: inset 0 4px 6px rgba(0,0,0,.15), 0 3px 0 #4d2a0e; }
 .queue { position: relative; z-index: 2; display: flex; justify-content: center; gap: 8px; margin: 6px 0 0; height: 146px; flex-shrink: 0; }
@@ -855,7 +876,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .tut-bubble small { display: block; margin-top: 4px; text-align: right; font-weight: 700; font-size: 11px; color: #b0875a; }
 .tut-bubble small[hidden] { display: none; }
 .tutorial.click { pointer-events: auto; cursor: pointer; } /* "tap anywhere" steps catch the tap */
-.tut-dots { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 6px; }
+.tut-dots { position: absolute; left: 50%; bottom: calc(14px + var(--sa-bottom)); transform: translateX(-50%); display: flex; gap: 6px; }
 .tut-dots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.4); }
 .tut-dots i.on { background: #ffe680; }
 .tut-hand[hidden] { display: none; }
@@ -892,7 +913,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .nav-btn.active img { width: 58px; }
 /* ---------- Bottom bar v2: floating rounded plank + raised golden tile (01b mockup) ---------- */
 .phone { --nav-h: 100px; }
-.bottom-nav { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); height: 76px; padding: 0 6px;
+.bottom-nav { left: 12px; right: 12px; bottom: calc(12px + var(--sa-bottom)); height: 76px; padding: 0 6px;
   border: 4px solid #7a3e12; border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(255,255,255,.4) 0, rgba(255,255,255,0) 12px),
@@ -1061,9 +1082,9 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .cutscene::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 45%; pointer-events: none;
   background: linear-gradient(transparent, rgba(20,10,2,.75)); }
 /* skip pill, caption panel, title ribbon with leaves, dots — styled after the Nectar Harvest asset sheet */
-.cs-skip { position: absolute; z-index: 2; right: 14px; top: max(14px, env(safe-area-inset-top)); padding: 6px 16px 7px; border-radius: 20px;
+.cs-skip { position: absolute; z-index: 2; right: 14px; top: max(14px, calc(var(--sa-top) + 8px)); padding: 6px 16px 7px; border-radius: 20px;
   background: linear-gradient(#6b4a1e, #4e3311); border: 3px solid #d9c49a; box-shadow: 0 3px 6px rgba(0,0,0,.35); font: 400 17px "Lilita One"; color: #fff; }
-.cs-caption { position: absolute; z-index: 2; left: 12px; right: 12px; bottom: max(18px, env(safe-area-inset-bottom)); padding: 34px 18px 14px;
+.cs-caption { position: absolute; z-index: 2; left: 12px; right: 12px; bottom: max(18px, calc(var(--sa-bottom) + 8px)); padding: 34px 18px 14px;
   border-radius: 24px; background: #fdf3df; border: 5px solid #d9894a; box-shadow: 0 0 0 4px #8a4a1a, inset 0 0 0 3px #f6dcb4, 0 10px 20px rgba(0,0,0,.4); }
 .cs-caption h2 { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); margin: 0; padding: 6px 24px 8px; white-space: nowrap; border-radius: 18px;
   background: linear-gradient(#e0a060, #b8692e 60%, #9a5222); border: 4px solid #6e3410; box-shadow: inset 0 3px 0 rgba(255,230,190,.55), 0 4px 0 #6e3410;
@@ -1102,7 +1123,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .loading { position: absolute; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; overflow: hidden;
   background: #8fd45a url("../assets/bg/loading.jpg") center / cover no-repeat; transition: opacity .5s ease; }
 .loading.done { opacity: 0; pointer-events: none; }
-.ld-logo { width: 78%; max-width: 330px; margin-top: max(36px, 7vh); filter: drop-shadow(0 8px 8px rgba(0,0,0,.25)); animation: bob 3s ease-in-out infinite; }
+.ld-logo { width: 78%; max-width: 330px; margin-top: max(36px, 7vh, calc(var(--sa-top) + 12px)); filter: drop-shadow(0 8px 8px rgba(0,0,0,.25)); animation: bob 3s ease-in-out infinite; }
 .ld-crew { position: relative; width: 100%; max-width: 430px; flex: 1; min-height: 0; }
 .ld-stump { position: absolute; left: 50%; bottom: 8%; width: 82%; height: 26%; transform: translateX(-50%); border-radius: 50% 50% 18% 18% / 34% 34% 14% 14%;
   background:
@@ -1124,12 +1145,12 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 @keyframes stripes { to { background-position: 28px 0, 0 0; } }
 
 /* ---------- Debug menu ---------- */
-.phone.no-nav .dbg-btn { left: 12px; top: 114px; } /* inside a level: under the pause button, clear of the hints */
-.dbg-btn { position: absolute; z-index: 35; left: 14px; top: 72px; /* main screens: under the profile, clear of the X buttons */ padding: 3px 9px; border-radius: 10px; background: #2a1a3a;
+.phone.no-nav .dbg-btn { left: 12px; top: max(114px, calc(var(--sa-top) + 110px)); } /* inside a level: under the pause button, clear of the hints */
+.dbg-btn { position: absolute; z-index: 35; left: 14px; top: max(72px, calc(var(--sa-top) + 66px)); /* main screens: under the profile, clear of the X buttons */ padding: 3px 9px; border-radius: 10px; background: #2a1a3a;
   border: 3px solid #ff5fd2; color: #ff9be6; font: 400 13px "Lilita One"; letter-spacing: 1px; opacity: .85; }
 .dbg-btn[hidden] { display: none; }
 .popup.dbg { max-width: 380px; }
-.popup.dbg .popup-body { padding-top: 50px; max-height: calc(100dvh - 140px); }
+.popup.dbg .popup-body { padding-top: 50px; max-height: calc(var(--phone-h) - 140px - var(--sa-top) - var(--sa-bottom)); }
 .popup.dbg h4 { margin: 10px 0 6px; font: 400 15px "Lilita One"; color: #6b3a12; }
 .dbg-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .dbg-grid button { min-height: 38px; padding: 4px 6px; border-radius: 10px; background: linear-gradient(#fff, #f1e2c8); border: 2px solid #c9762c;
@@ -1139,7 +1160,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 
 /* ---------- Toast ---------- */
 .toast { white-space: normal !important; width: max-content; max-width: calc(100% - 40px); text-align: center; }
-.toast { position: absolute; z-index: 50; left: 50%; bottom: 110px; transform: translate(-50%, 20px); opacity: 0;
+.toast { position: absolute; z-index: 50; left: 50%; bottom: calc(110px + var(--sa-bottom)); transform: translate(-50%, 20px); opacity: 0;
   background: rgba(40,20,8,.92); color: #fff; padding: 10px 18px; border-radius: 14px; font-weight: 600; font-size: 15px;
   white-space: nowrap; pointer-events: none; transition: all .25s; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -1297,7 +1318,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 
 /* ---------- Report a problem (js/report.js) ---------- */
 .popup.report { max-width: 400px; }
-.popup.report .popup-body { max-height: calc(100dvh - 120px); overflow-y: auto; padding-top: 54px; }
+.popup.report .popup-body { max-height: calc(var(--phone-h) - 120px - var(--sa-top) - var(--sa-bottom)); overflow-y: auto; padding-top: 54px; }
 .rp-label { display: block; margin: 12px 0 5px; font: 400 16px "Lilita One"; color: #6b3a12; }
 .rp-label:first-child { margin-top: 0; }
 .rp-label small { font: 500 11px "Fredoka"; color: #8a6040; }

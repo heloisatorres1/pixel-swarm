@@ -62,8 +62,8 @@ window.PSPerf = (function () {
   const CSS = `
   .perf-hud { position: fixed; z-index: 10000; width: 196px; padding: 6px 7px 7px; border-radius: 8px; background: rgba(16, 18, 24, .82);
     color: #e8ecf2; font: 11px/1.35 ui-monospace, Consolas, monospace; pointer-events: none; user-select: none; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
-  .perf-hud.c0 { top: calc(env(safe-area-inset-top) + 4px); left: 4px; } .perf-hud.c1 { top: calc(env(safe-area-inset-top) + 4px); right: 4px; }
-  .perf-hud.c2 { bottom: calc(env(safe-area-inset-bottom) + 4px); right: 4px; } .perf-hud.c3 { bottom: calc(env(safe-area-inset-bottom) + 4px); left: 4px; }
+  .perf-hud.c0 { top: calc(var(--sa-top, 0px) + 4px); left: 4px; } .perf-hud.c1 { top: calc(var(--sa-top, 0px) + 4px); right: 4px; }
+  .perf-hud.c2 { bottom: calc(var(--sa-bottom, 0px) + 4px); right: 4px; } .perf-hud.c3 { bottom: calc(var(--sa-bottom, 0px) + 4px); left: 4px; }
   .perf-hud .ph { display: flex; justify-content: space-between; align-items: center; gap: 4px; pointer-events: auto; cursor: pointer; font-weight: 700; font-size: 12px; }
   .perf-hud .ph b { font-size: 15px; } .perf-hud .good { color: #7ee08a; } .perf-hud .warn { color: #ffd166; } .perf-hud .bad { color: #ff6b6b; }
   .perf-hud pre { margin: 3px 0 4px; font: inherit; white-space: pre; }

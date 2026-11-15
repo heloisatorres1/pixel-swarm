@@ -1549,7 +1549,22 @@
   }
   // Sizes the canvas to the screen's real pixels with a WHOLE number of pixels per cell,
   // so every gap between pixels is exactly the same (no uneven lines after scaling).
+  // Fits the game screen to the phone: the board gets the height left after the top bar, the parts under it and
+  // the safe areas (notch, home bar). On short screens the parts under the board shrink (down to 72%) so the
+  // picture keeps at least 220 px and nothing is pushed off screen.
+  const GAME_PARTS = 60 + 58 + 152 + 84; // ad slots, slots, line of blocks, booster bar (px at full size)
+  function fitGameLayout() {
+    const scr = $('screen-game');
+    const H = $('app').clientHeight, top = scr.querySelector('.game-top').offsetHeight;
+    const bottom = parseFloat(getComputedStyle(scr).paddingBottom) || 0; // = the bottom safe area
+    const parts = GAME_PARTS + (state.noAds ? 0 : 50);                   // + the banner
+    const other = top + 8 + 20 + bottom;                                  // board-wrap padding, smallest tree-hole gap
+    const gz = Math.max(0.72, Math.min(1, (H - other - 220) / parts));
+    scr.style.setProperty('--gz', gz.toFixed(3));
+    scr.style.setProperty('--board-max', Math.floor(H - other - parts * gz) + 'px');
+  }
   function layoutBoard() {
+    fitGameLayout();
     const g = game, cv = $('g-board'), box = cv.parentElement;
     const cs = getComputedStyle(box), dpr = window.devicePixelRatio || 1;
     const availW = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
@@ -2560,6 +2575,8 @@
   }
   const DEBUG_CMDS = {
     perf: () => toast(PSPerf.toggle() ? 'Performance overlay ON' : 'Performance overlay OFF'),
+    // fake a phone's notch and home bar (pink areas) to check the safe areas on a computer
+    safe_sim: () => { const on = setSafeSim(!document.documentElement.classList.contains('sim-safe')); toast(on ? 'Notch simulation ON (pink = unsafe areas)' : 'Notch simulation OFF'); },
     report: () => openReport(),
     // save codes (testers): copy this progress, or load the one attached to a bug report
     save_copy: () => copyText(saveCode(), 'Save code copied'),
@@ -2582,7 +2599,7 @@
     zero: () => { state.coins = 0; state.gems = 0; toast('Coins and gems set to 0'); },
     boosters: () => { state.debugBoosters = true; BOOSTERS.forEach((b) => { state.boosters[b.id] = (state.boosters[b.id] || 0) + 5; }); toast('All boosters unlocked, +5 each'); },
     skins: () => { state.ownedSkins = SKINS.map((s) => s.id); toast('All skins unlocked'); },
-    noads: () => { state.noAds = !state.noAds; $('app').classList.toggle('no-ads', state.noAds); toast(`No Ads ${state.noAds ? 'ON' : 'OFF'}`); },
+    noads: () => { state.noAds = !state.noAds; $('app').classList.toggle('no-ads', state.noAds); if (game && currentScreen === 'game') layoutBoard(); toast(`No Ads ${state.noAds ? 'ON' : 'OFF'}`); },
     levels: () => {
       D.THEMES.forEach((t) => D.DIFFICULTIES.forEach((d) => {
         state.progress[`${t.id}-${d}`] = Array(D.LEVELS_PER_DIFFICULTY).fill(3);
@@ -2626,7 +2643,7 @@
   function runCheat(cmd) {
     closePopup(true);
     DEBUG_CMDS[cmd]();
-    if (!cmd.startsWith('p_') && !cmd.startsWith('perf') && !['win', 'lose', 'solve', 'speed', 'reset', 'report', 'save_copy', 'save_load'].includes(cmd)) refreshAfterCheat();
+    if (!cmd.startsWith('p_') && !cmd.startsWith('perf') && !['win', 'lose', 'solve', 'speed', 'reset', 'report', 'save_copy', 'save_load', 'safe_sim'].includes(cmd)) refreshAfterCheat();
   }
 
   // ---------- Click handling ----------
@@ -3033,6 +3050,15 @@
     return `tapped "${label || action}"${label && label.toLowerCase() !== action ? ` (${action})` : ''}`;
   }
 
+  // ---------- Safe areas: notch simulation (debug) ----------
+  function setSafeSim(on) {
+    document.documentElement.classList.toggle('sim-safe', on);
+    try { localStorage.setItem('pixelswarm.simsafe', on ? '1' : ''); } catch (e) { /* ignore */ }
+    if (typeof layoutGame === 'function' && currentScreen === 'game') layoutGame();
+    window.dispatchEvent(new Event('resize')); // screens that measure themselves fit again
+    return on;
+  }
+
   // ---------- Report a problem (js/report.js) ----------
   // what the game attaches to a report: where the player is and the state of the level
   function reportContext() {
@@ -3166,6 +3192,9 @@
   }
   // Dev shortcut: index.html#settings opens that screen directly (after the renderer is ready)
   let startAction = location.hash.slice(1);
+  // dev: add '-notch' (e.g. #game-notch) to simulate a phone notch and home bar; Debug > Simulate notch remembers it
+  if (startAction.endsWith('-notch')) { startAction = startAction.slice(0, -6); setSafeSim(true); }
+  else if (DEBUG) { try { if (localStorage.getItem('pixelswarm.simsafe')) setSafeSim(true); } catch (e) { /* ignore */ } }
   // dev: add "-still" (e.g. #story_last-still) to freeze animations for screenshots
   if (startAction.endsWith('-still')) { startAction = startAction.slice(0, -6); document.body.classList.add('dev-still'); }
   const perfHash = startAction.match(/^perf(bench|stress)_(\d+)$/); // e.g. #perfbench_60 = a 60-second run
