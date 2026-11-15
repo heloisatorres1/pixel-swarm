@@ -79,7 +79,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 
 /* ---------- Logo (assets/sprites/logo.png) ---------- */
 .logo { position: relative; z-index: 2; align-self: center; margin: -4px 0 0; }
-.logo img { width: 236px; filter: drop-shadow(0 6px 6px rgba(0,0,0,.25)); animation: bob 3s ease-in-out infinite; }
+.logo img { width: 190px; filter: drop-shadow(0 6px 6px rgba(0,0,0,.25)); animation: bob 3s ease-in-out infinite; }
 @keyframes bob { 50% { translate: 0 -6px; } }
 
 /* ---------- Middle ---------- */
@@ -1131,7 +1131,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 
 /* ---------- Short phones ---------- */
 @media (max-height: 740px) {
-  .logo img { width: 190px; }
+  .logo img { width: 160px; }
   .gbtn { height: 48px; } .gbtn.big { height: 58px; }
   .side-btn img { width: 54px; }
   .mascot { width: 120px; }
@@ -1277,3 +1277,9 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .wd-card .wd-btn .gem { width: 15px; } .wd-card .wd-btn .lk { width: 12px; }
 .wd-card .ok { position: absolute; right: -4px; top: -6px; width: 22px; }
 .wd-card .wd-btn.locked { -webkit-text-stroke: 0; color: #6d6a5a; font-size: 12px; }
+
+/* Settings: back up / restore the save (save code) */
+.save-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 800; color: #6b3a12; }
+.save-row span:first-child { flex: 1; }
+.save-row .gbtn.small { height: 32px; padding: 0 10px; }
+.save-row .gbtn.small span { font-size: 14px; }

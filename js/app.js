@@ -34,6 +34,7 @@
     attempts: {},                       // level key -> how many times it was started (for "first-try wins")
     event: { ends: 0, pumpkins: 0, levels: [], claimedRewards: [] }, // levels = stars of each won event level
     playerName: 'Player',
+    notifAsked: false,                  // asked for notification permission yet (after the first win)
     avatar: 'bee',
     ageGroup: null,                     // '0-12' | '13-17' | '18+' (asked once, used later for ad settings)
     launches: 0,
@@ -81,12 +82,17 @@
   // While empty, the buttons show a "coming soon" message.
   const LINKS = { privacy: '', terms: '', feedback: '' };
 
+  // ---- SAVING ----
+  // The save is written to two slots (main + backup) so a broken write never loses progress; the phone app also
+  // keeps a copy in its own storage (PSNative.storeSet), and the browser is asked never to clear the game's data.
+  const BACKUP_KEY = SAVE_KEY + '.backup';
+  function readSave(key) {
+    try { const raw = localStorage.getItem(key); if (!raw) return null; const o = JSON.parse(raw); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
+  }
   function loadState() {
     let s = Object.assign({}, DEFAULT_STATE);
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (raw) s = Object.assign(s, JSON.parse(raw));
-    } catch (e) { /* storage unavailable - use defaults */ }
+    const saved = readSave(SAVE_KEY) || readSave(BACKUP_KEY); // main slot broken -> use the backup
+    if (saved) s = Object.assign(s, saved.data && saved.v ? saved.data : saved); // (older saves had no wrapper)
     s.settings = Object.assign({}, DEFAULT_STATE.settings, s.settings);
     s.stats = Object.assign({}, DEFAULT_STATE.stats, s.stats);
     s.event = Object.assign({}, DEFAULT_STATE.event, s.event);
@@ -100,8 +106,28 @@
     for (let i = 0; i < 8; i++) id += (i === 4 ? '-' : '') + chars[Math.floor(Math.random() * chars.length)];
     return id;
   }
+  const SAVE_VERSION = 2;
   function saveState() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+    try {
+      const json = JSON.stringify({ v: SAVE_VERSION, savedAt: Date.now(), data: state });
+      const prev = localStorage.getItem(SAVE_KEY);
+      if (prev) localStorage.setItem(BACKUP_KEY, prev); // keep the previous save as the backup
+      localStorage.setItem(SAVE_KEY, json);
+      PSNative.storeSet(SAVE_KEY, json); // phone app: durable copy (no-op in the browser)
+    } catch (e) { /* storage full or blocked: keep playing */ }
+  }
+  // Save code: the whole save as text, to back it up or move it to another device (Settings > Back up / Restore)
+  const saveCode = () => 'PSW1-' + btoa(unescape(encodeURIComponent(JSON.stringify({ v: SAVE_VERSION, data: state }))));
+  function restoreFromCode(code) {
+    try {
+      const c = String(code || '').trim();
+      if (!c.startsWith('PSW1-')) throw new Error('format');
+      const o = JSON.parse(decodeURIComponent(escape(atob(c.slice(5)))));
+      if (!o || !o.data || !o.data.playerId) throw new Error('content');
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ v: SAVE_VERSION, savedAt: Date.now(), data: o.data }));
+      PSNative.storeSet(SAVE_KEY, localStorage.getItem(SAVE_KEY));
+      return true;
+    } catch (e) { return false; }
   }
 
   const state = loadState();
@@ -176,10 +202,14 @@
     play: 'Gameplay', skins: 'Skins',
   };
 
-  function haptic() {
-    if (!state.settings.haptics) return;
-    PSNative.vibrate('light'); // Capacitor Haptics on phones, navigator.vibrate on the web
+  // fx(name): the sound effect + the matching vibration (each follows its own Settings switch)
+  const HAPTIC_FOR = { tap: 'light', pick: 'light', error: 'warning', win: 'success', lose: 'error', key: 'medium', unlock: 'medium',
+    hammer: 'heavy', crack: 'heavy', ice: 'light', booster: 'medium', wind: 'medium', coin: 'light', star: 'light', slot: 'light' };
+  function fx(name) {
+    PSAudio.sfx(name);
+    if (state.settings.haptics && HAPTIC_FOR[name]) PSNative.haptic(HAPTIC_FOR[name]);
   }
+  function haptic(kind = 'light') { if (state.settings.haptics) PSNative.haptic(kind); }
 
   // ---------- Pop-ups ----------
   let openPopupEl = null, lastFocus = null;
@@ -217,7 +247,10 @@
     renderSettings();
     const names = { music: 'Music', sounds: 'Sounds', haptics: 'Haptics', notifications: 'Notifications' };
     toast(`${names[key]} ${state.settings[key] ? 'on' : 'off'}`);
-    if (key === 'notifications') PSNative.scheduleDailyReward(state.settings.notifications);
+    if (key === 'notifications') {
+      if (state.settings.notifications) PSNative.requestNotifications().then(() => refreshReminders());
+      else refreshReminders();
+    }
     if (key === 'music') PSAudio.setMusic(state.settings.music);
     if (key === 'sounds') PSAudio.setSfx(state.settings.sounds);
   }
@@ -225,8 +258,8 @@
     if (LINKS[key]) window.open(LINKS[key], '_blank', 'noopener');
     else toast({ privacy: 'Privacy Policy', terms: 'Terms of Service', feedback: 'Feedback' }[key] + ' — coming soon');
   }
-  function copyText(text) {
-    const done = () => toast('Player ID copied!');
+  function copyText(text, message = 'Copied!') {
+    const done = () => toast(message);
     const fallback = () => {
       const ta = document.createElement('textarea');
       ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
@@ -325,7 +358,7 @@
   }
 
   function grant({ gems = 0, coins = 0, noAds = false }) {
-    if (gems || coins) PSAudio.sfx('coin');
+    if (gems || coins) fx('coin');
     state.gems += gems; state.coins += coins;
     state.stats.coinsEarned += coins;
     if (noAds) state.noAds = true;
@@ -432,7 +465,7 @@
     grant({ gems: r.gems || 0, coins: r.coins || 0 });
     toast(`Day ${info.nextIndex + 1}: +${rewardText(r)}`);
     renderActivities();
-    PSNative.scheduleDailyReward(state.settings.notifications);
+    refreshReminders(); // next "daily reward is ready" = tomorrow
   }
 
   // ---------- Activities: daily tasks ----------
@@ -919,7 +952,7 @@
         const pic = D.levelPicture(e.theme, e.diff, e.index);
         return galleryDone(e)
           ? `<div class="pic-card ${e.event ? 'event' : ''}"><img src="${galleryImg(e)}" alt=""><span class="name">${D.PICTURES[pic].name}</span>
-              <span class="gal-lvl">${e.label}</span><button class="mini-btn" data-action="share" data-pic="${pic}">Share</button></div>`
+              <span class="gal-lvl">${e.label}</span><button class="mini-btn" data-action="share" data-pic="${e.theme}-${e.diff}-${e.index}">Share</button></div>`
           : `<div class="pic-card locked ${e.event ? 'event' : ''}"><img src="${D.pictureURL(pic, 10, { silhouette: true })}" alt=""><span class="name">???</span>
               <span class="gal-lvl">${e.label}</span></div>`;
       }).join('')}</div>`;
@@ -945,11 +978,38 @@
     $('col-grid').innerHTML = html(items.slice(colPage * size, colPage * size + size));
     $('col-page').textContent = `${colPage + 1}/${pages}`;
   }
-  function sharePicture(id) {
-    const text = `I completed "${D.PICTURES[id].name}" in Pixel Swarm!`;
-    if (navigator.share) navigator.share({ title: 'Pixel Swarm', text }).catch(() => {});
-    else copyText(text, 'Copied — paste it to share!');
+  // SHARE: a picture card of the finished level (picture + game name + link) through the share sheet;
+  // without a share sheet (most computers): the card is saved as an image and the link is copied
+  const GAME_URL = 'https://heloisatorres1.github.io/pixel-swarm/';
+  function shareCard(e) {
+    const grid = D.levelGrid(D.levelPicture(e.theme, e.diff, e.index), e.diff), W = grid[0].length, H = grid.length;
+    const c = document.createElement('canvas'); c.width = 600; c.height = 720;
+    const x = c.getContext('2d');
+    const bg = x.createLinearGradient(0, 0, 0, 720); bg.addColorStop(0, '#fff6df'); bg.addColorStop(1, '#f6d9a6');
+    x.fillStyle = bg; x.fillRect(0, 0, 600, 720);
+    x.fillStyle = '#c9762c'; x.fillRect(0, 0, 600, 12); x.fillRect(0, 708, 600, 12);
+    const cell = Math.floor(480 / Math.max(W, H)), ox = (600 - cell * W) / 2, oy = 110 + (480 - cell * H) / 2;
+    x.fillStyle = '#30543c'; x.fillRect(ox - 14, oy - 14, cell * W + 28, cell * H + 28);
+    grid.forEach((row, yy) => [...row].forEach((ch, xx) => { if (D.PALETTE[ch]) { x.fillStyle = D.PALETTE[ch]; x.fillRect(ox + xx * cell, oy + yy * cell, cell - (cell > 6 ? 1 : 0), cell - (cell > 6 ? 1 : 0)); } }));
+    x.textAlign = 'center'; x.lineJoin = 'round';
+    const outline = (t, y, size, fill) => { x.font = `${size}px "Lilita One", sans-serif`; x.lineWidth = size / 5; x.strokeStyle = '#4a2408'; x.strokeText(t, 300, y); x.fillStyle = fill; x.fillText(t, 300, y); };
+    outline('Pixel Swarm', 72, 52, '#ffd84a');
+    outline(`I completed ${D.PICTURES[D.levelPicture(e.theme, e.diff, e.index)].name}!`, 655, 34, '#ffffff');
+    x.font = '700 16px Fredoka, sans-serif'; x.fillStyle = '#6b3a12'; x.fillText(e.label + ' · play free: heloisatorres1.github.io/pixel-swarm', 300, 690);
+    return c;
   }
+  async function sharePicture(key) {
+    const e = GALLERY.find((g) => `${g.theme}-${g.diff}-${g.index}` === key) || GALLERY[0];
+    const name = D.PICTURES[D.levelPicture(e.theme, e.diff, e.index)].name;
+    const text = `I completed "${name}" (${e.label}) in Pixel Swarm! 🐝 Can you clear it?`, card = shareCard(e);
+    const r = await PSNative.share({ title: 'Pixel Swarm', text, url: GAME_URL, image: card, fileName: `pixel-swarm-${key}.png` });
+    if (r === 'shared' || r === 'cancelled') return;
+    // no share sheet: save the card and copy the message + link
+    const link = document.createElement('a');
+    link.download = `pixel-swarm-${key}.png`; link.href = card.toDataURL('image/png'); link.click();
+    copyText(`${text} ${GAME_URL}`, 'Image saved and link copied: paste it anywhere to share!');
+  }
+
 
   // The whole Events screen must fit without scrolling: if the content is taller than the panel, shrink it to fit.
   function fitEvents() {
@@ -1742,7 +1802,7 @@
     if (!b) return;
     if (idx > 0 && g.mode !== 'pick') return;
     const pick = g.mode === 'pick';
-    const thaw = (c) => crackIce(g, c).forEach((t) => { t.thawed = true; PSAudio.sfx('ice'); }); // a take cracks the visible ice in the other columns
+    const thaw = (c) => crackIce(g, c).forEach((t) => { t.thawed = true; fx('ice'); }); // a take cracks the visible ice in the other columns
     if (b.kind === 'pipe') return toast('Pipes push their blocks up when the space above them is free');
     if (b.kind === 'lock' && pick) return toast('Locks open only with their key 🔑');
     if (pick) { if (b.link) unlink(b); } // Free Pick takes any block alone (frozen too)
@@ -1750,7 +1810,7 @@
       const why = blockedReason(col);
       if (why) {
         const other = g.cols.some((c, i) => i !== col && c[0] && !blockedReason(i));
-        if (other) { PSAudio.sfx('error'); return toast(why); }
+        if (other) { fx('error'); return toast(why); }
         // nothing else can be played: lift the restriction so the level can never get stuck
         if (b.kind === 'lock') { g.unlocked.add(b.id); settle(g); renderQueue(); return toast('🔓 The lock opened!'); }
         b.frozen = 0; if (b.link) unlink(b);
@@ -1761,8 +1821,8 @@
       if (pick) { spendBooster('pick'); g.mode = null; setHint(null); }
       hammerFly(document.querySelector(`#g-queue [data-col="${col}"][data-i="${idx}"]`));
       const broke = hitWood(g);
-      PSAudio.sfx(broke ? 'crack' : 'hammer');
-      settle(g); haptic(); drawBoard(); renderQueue(); renderBoosters();
+      fx(broke ? 'crack' : 'hammer');
+      settle(g); drawBoard(); renderQueue(); renderBoosters();
       toast(broke ? '🔨 Crack! The wood broke' : `🔨 Bonk! ${g.wood ? g.wood.left : 0} more hammer${g.wood && g.wood.left === 1 ? '' : 's'} to break the wood`);
       if (tutorialTap) nextCoachStep();
       return;
@@ -1770,7 +1830,7 @@
     // linked blocks go to the slots together (the partner comes along from wherever it is in the line)
     const at = b.link ? findPartner(g, b) : null;
     const need = at ? 2 : 1, freeSlots = g.slots.map((s, i) => (s ? -1 : i)).filter((i) => i >= 0);
-    if (freeSlots.length < need) { PSAudio.sfx('error'); return toast(need > 1 ? 'Linked blocks need 2 free slots!' : 'No free slot — wait for the bees!'); }
+    if (freeSlots.length < need) { fx('error'); return toast(need > 1 ? 'Linked blocks need 2 free slots!' : 'No free slot — wait for the bees!'); }
     const group = [[col, idx]];
     if (at) group.push(at);
     group.map(([c, i]) => [c, i, g.cols[c][i]]).forEach(([c, i, blk], n) => {
@@ -1781,7 +1841,7 @@
     });
     settle(g);
     if (pick) { spendBooster('pick'); g.mode = null; setHint(null); }
-    haptic(); PSAudio.sfx('pick');
+    fx('pick');
     renderSlots(); renderQueue(); renderBoosters();
     freeSlots.slice(0, need).forEach((i) => { const el = document.querySelector(`#screen-game [data-slot="${i}"]`); if (el) el.classList.add('pop'); });
     if (tutorialTap) nextCoachStep();
@@ -1895,7 +1955,7 @@
       if (!back) {
         // reached the pixel: eat it, pick up a little block of its color and fly home
         (bee.pend || [bee.t.key]).forEach((k) => g.pending.delete(k));
-        PSAudio.sfx('eat');
+        fx('eat');
         puzzleEvents(bee.ev || []);
         bee.block.inFlight -= 1; boardChanged = true; slotsChanged = true;
         bee.phase = 'back'; bee.p = 0; bee.el.carry(true);
@@ -1910,7 +1970,7 @@
     // finished blocks leave their slot (linked blocks only together, once both are done)
     const done = (b) => b.amount <= 0 && b.inFlight <= 0;
     g.slots.forEach((b, i) => {
-      if (b && done(b) && (!b.link || g.slots.every((o) => !o || o.link !== b.link || done(o)))) { g.slots[i] = null; slotsChanged = true; PSAudio.sfx('slot'); }
+      if (b && done(b) && (!b.link || g.slots.every((o) => !o || o.link !== b.link || done(o)))) { g.slots[i] = null; slotsChanged = true; fx('slot'); }
     });
     if (slotsChanged) renderSlots();
     PSRender.frame(); // draw this step (also when the browser throttles animation frames)
@@ -1921,11 +1981,11 @@
   // what the player sees when a bee (or the Wind) triggers a puzzle
   function puzzleEvents(ev) {
     if (!ev.length) return;
-    if (ev.includes('key')) PSAudio.sfx('key');
-    if (ev.includes('cookie')) PSAudio.sfx('crack');
+    if (ev.includes('key')) fx('key');
+    if (ev.includes('cookie')) fx('crack');
     if (ev.includes('key')) (ev.keyIds || []).forEach((id) => { game.opening.add(id); animateKey(id); });
     if (ev.includes('cookie')) toast('🍪 Crunch! The cookie broke');
-    if (ev.some((e) => e !== 'big') && state.settings.haptics) PSNative.vibrate('medium');
+
   }
   // KEY ANIMATION: the key lifts off its nest in the picture, flies in an arc to its padlock in the line,
   // then the padlock opens (lock_open sprite), wiggles and pops away; only then does the column move up.
@@ -1962,21 +2022,19 @@
     };
     frame();
     const landed = () => {
-      PSAudio.sfx('unlock');
+      fx('unlock');
       key.remove();
       const el = document.querySelector(`#g-queue .block.lock[data-lock="${id}"]`); // (the line may have re-rendered)
       if (!el || game !== g) return finish();
       const im = el.querySelector('img'); if (im) im.src = 'assets/sprites/puzzles/lock_open.png';
       el.classList.add('unlocking');
-      if (state.settings.haptics) PSNative.vibrate('medium');
       toast('🔓 Unlocked!');
       setTimeout(finish, 650);
     };
   }
   function endLevel(win) {
     game.over = true;
-    PSAudio.sfx(win ? 'win' : 'lose');
-    if (state.settings.haptics) PSNative.vibrate('heavy');
+    fx(win ? 'win' : 'lose');
     if (win) { $('g-board').parentElement.classList.add('flash'); setTimeout(() => { $('g-board').parentElement.classList.remove('flash'); showWin(3 - Math.min(2, game.extras)); }, 600); }
     else openPopup('popup-fail');
   }
@@ -2037,7 +2095,7 @@
       removed.push([xx, yy, ch]); g.reserved.delete(k);
       events.push(...eatPixel(g, k));
     }));
-    windEffect(removed); PSAudio.sfx('wind');
+    windEffect(removed); fx('wind');
     toast(`Whoosh! ${removed.length} pixels blown away`);
     // blocks of that color leave the line; their linked partners become normal blocks
     g.cols.flat().filter((b) => b.color === color && b.link).forEach(unlink);
@@ -2049,15 +2107,33 @@
     drawBoard(); renderQueue(); renderSlots();
   });
 
+  // NOTIFICATIONS (phone app): plan the three reminders from the current state
+  function reminderPlan() {
+    const at = (days, hour) => { const d = new Date(); d.setDate(d.getDate() + days); d.setHours(hour, 0, 0, 0); return d; };
+    const ends = state.event.ends;
+    return {
+      enabled: !!state.settings.notifications,
+      daily: at(1, 10),                                               // tomorrow 10:00: a new daily reward
+      comeback: at(2, 18),                                            // 2 days without playing: "your bugs miss you"
+      event: ends && ends - 24 * 3600 * 1000 > Date.now() ? new Date(ends - 24 * 3600 * 1000) : null, // a day before it ends
+      eventName: D.EVENT.title,
+    };
+  }
+  function refreshReminders() { return PSNative.scheduleReminders(reminderPlan()); }
   function showWin(stars = 3) {
     const g = game;
+    // the first win is a good moment to ask for notification permission (never on the first launch)
+    if (!state.notifAsked && state.settings.notifications && PSNative.native) {
+      state.notifAsked = true; saveState();
+      setTimeout(() => PSNative.requestNotifications().then(() => refreshReminders()), 1500);
+    }
     const firstEventWin = g.event && g.index === state.event.levels.length;
     track('level', { theme: g.theme, diff: g.diff, index: g.index, stars, event: g.event, firstTry: state.attempts[g.key] === 1 });
     $('win-pumpkins').hidden = !firstEventWin;
     $('win-pk').textContent = '+' + EVENT_PUMPKINS_PER_WIN;
     g.reward = WIN_COINS[g.diff];
     $('win-stars').innerHTML = [0, 1, 2].map((i) => `<img class="${i < stars ? '' : 'off'}" src="assets/sprites/star.png" alt="">`).join('');
-    for (let i = 0; i < stars; i++) setTimeout(() => PSAudio.sfx('star'), 700 + i * 260); // a chime per star
+    for (let i = 0; i < stars; i++) setTimeout(() => fx('star'), 700 + i * 260); // a chime per star
     $('win-pic').src = D.gridURL(g.grid, Math.max(4, Math.floor(168 / g.grid.length)));
     $('win-name').textContent = `${themeById(g.theme).name} • ${D.PICTURES[g.picId].name}`;
     $('win-coins').textContent = '+' + g.reward;
@@ -2621,6 +2697,73 @@
     audiotest: () => { PSAudio.unlock(); testPuzzle('wood', true); setTimeout(() => { document.body.dataset.audio = JSON.stringify(PSAudio.debug()); }, 60000); },
     // dev: index.html#audiolevels renders the music and some effects offline and reports their loudness
     audiolevels: async () => { const r = []; for (const w of ['menu', 'game', 'pick,slot,coin,tap', 'win']) r.push(await PSAudio.measure(w)); document.body.dataset.levels = JSON.stringify(r); },
+    // dev: index.html#featuretest checks saving, share, haptics and notifications with a SIMULATED phone
+    // (fake Capacitor plugins that record calls) and writes the results into <body data-featuretest>
+    featuretest: async () => {
+      const res = {}, log = [];
+      const ok = (name, cond, info = '') => { res[name] = cond ? 'ok' : 'FAIL ' + info; };
+      // --- saving: main + backup slots, corrupt main -> backup, save code round trip
+      state.coins = 1234; saveState(); state.coins = 1235; saveState();
+      const main = JSON.parse(localStorage.getItem(SAVE_KEY)), backup = JSON.parse(localStorage.getItem(SAVE_KEY + '.backup'));
+      ok('save.slots', main.v === 2 && main.data.coins === 1235 && backup.data.coins === 1234, JSON.stringify([main.v, main.data.coins, backup.data && backup.data.coins]));
+      localStorage.setItem(SAVE_KEY, '{broken');
+      ok('save.recover', readSave(SAVE_KEY) === null && readSave(SAVE_KEY + '.backup').data.coins === 1234);
+      saveState();
+      const code = saveCode(); state.coins = 1; saveState();
+      ok('save.code', restoreFromCode(code) && JSON.parse(localStorage.getItem(SAVE_KEY)).data.coins === 1235 && !restoreFromCode('nonsense'));
+      ok('save.legacy', (() => { localStorage.setItem('ps.test', JSON.stringify({ coins: 7 })); const o = readSave('ps.test'); localStorage.removeItem('ps.test'); return o.coins === 7; })());
+      // --- web haptics: vibration patterns, and the Settings switch
+      const vib = []; const realVib = navigator.vibrate; navigator.vibrate = (p) => { vib.push(p); return true; };
+      state.settings.haptics = true; fx('win'); fx('error'); fx('eat');
+      state.settings.haptics = false; fx('lose'); state.settings.haptics = true;
+      navigator.vibrate = realVib;
+      ok('haptics.web', JSON.stringify(vib) === JSON.stringify([[15, 60, 25], [25, 40, 25]]), JSON.stringify(vib));
+      // --- web share fallback (no share sheet): image download + link copied
+      const realShare = navigator.share; navigator.share = undefined;
+      let downloaded = null; const realClick = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function () { downloaded = this.download; };
+      let copied = null; const realClip = navigator.clipboard && navigator.clipboard.writeText;
+      if (navigator.clipboard) navigator.clipboard.writeText = (t) => { copied = t; return Promise.resolve(); };
+      await sharePicture('flowers-easy-0');
+      HTMLAnchorElement.prototype.click = realClick; navigator.share = realShare;
+      if (navigator.clipboard) navigator.clipboard.writeText = realClip;
+      ok('share.web-fallback', downloaded === 'pixel-swarm-flowers-easy-0.png' && (copied === null || copied.includes('github.io/pixel-swarm')), downloaded + ' | ' + copied);
+      // --- web share sheet with an image file
+      let shared = null; navigator.share = (d) => { shared = d; return Promise.resolve(); }; const realCan = navigator.canShare; navigator.canShare = () => true;
+      await sharePicture('animals-hard-2');
+      navigator.share = realShare; navigator.canShare = realCan;
+      ok('share.web-sheet', shared && shared.files && shared.files[0].type === 'image/png' && shared.files[0].size > 2000 && shared.text.includes('Pixel Swarm'), JSON.stringify(shared && { t: shared.text, n: shared.files && shared.files.length }));
+      // --- simulated phone (Capacitor) ---
+      const calls = [], perm = { display: 'granted' };
+      const rec = (name) => (arg) => { calls.push([name, arg]); return Promise.resolve(name === 'checkPermissions' || name === 'requestPermissions' ? perm : name === 'get' ? { value: null } : {}); };
+      window.Capacitor = { isNativePlatform: () => true, Plugins: {
+        Haptics: { impact: rec('impact'), notification: rec('notification') },
+        LocalNotifications: { createChannel: rec('createChannel'), addListener: rec('addListener'), checkPermissions: rec('checkPermissions'), requestPermissions: rec('requestPermissions'), cancel: rec('cancel'), schedule: rec('schedule') },
+        Share: { share: rec('share') }, Preferences: { get: rec('get'), set: rec('set') } } };
+      fx('win'); fx('hammer');
+      ok('haptics.phone', calls.some(([n, a]) => n === 'notification' && a.type === 'SUCCESS') && calls.some(([n, a]) => n === 'impact' && a.style === 'HEAVY'));
+      calls.length = 0; state.event.ends = Date.now() + 3 * 24 * 3600 * 1000; state.settings.notifications = true;
+      const r1 = await refreshReminders();
+      const sch = calls.find(([n]) => n === 'schedule'), list = sch ? sch[1].notifications : [];
+      ok('notif.schedule', r1 === 'scheduled 3' && list.map((n) => n.id).join() === '1001,1002,1003' && list.every((n) => n.schedule.at > new Date()) && list[0].schedule.at.getHours() === 10, r1);
+      perm.display = 'denied'; calls.length = 0;
+      const r2 = await refreshReminders();
+      ok('notif.no-permission', r2 === 'no-permission' && !calls.some(([n]) => n === 'schedule' || n === 'requestPermissions'), r2);
+      perm.display = 'granted'; state.settings.notifications = false; calls.length = 0;
+      const r3 = await refreshReminders();
+      ok('notif.off', r3 === 'off' && calls.some(([n]) => n === 'cancel') && !calls.some(([n]) => n === 'schedule'), r3);
+      state.settings.notifications = true; state.event.ends = Date.now() + 3600 * 1000; calls.length = 0;
+      const r4 = await refreshReminders();
+      ok('notif.event-too-close', r4 === 'scheduled 2', r4); // the event ends in 1 h: no "ends tomorrow" reminder
+      calls.length = 0; saveState();
+      ok('save.phone-copy', calls.some(([n, a]) => n === 'set' && a.key === SAVE_KEY && a.value.includes('"v":2')));
+      calls.length = 0; await sharePicture('fruits-medium-1');
+      ok('share.phone', calls.some(([n, a]) => n === 'share' && a.url.includes('pixel-swarm') && a.text.includes('Pixel Swarm')));
+      delete window.Capacitor;
+      document.body.dataset.featuretest = JSON.stringify(res);
+    },
+    // dev: index.html#sharecard puts a share card image into <body data-card> (to review the artwork)
+    sharecard: () => { document.body.dataset.card = shareCard(GALLERY.find((g) => g.theme === 'animals' && g.diff === 'medium')).toDataURL('image/png'); },
     // dev: index.html#layout_probe writes the game screen's layout boxes into <body data-rects> (for layout checks)
     layout_probe: () => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'medium', 0);
       setTimeout(() => { const r = (id) => { const b = $(id).getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; };
@@ -2684,7 +2827,14 @@
     'claim-daily': () => claimDaily(),
     'claim-task': (el) => claimTask(el.dataset.task),
     settings: () => { renderSettings(); openPopup('popup-settings'); },
-    'copy-id': () => copyText(state.playerId),
+    'copy-id': () => copyText(state.playerId, 'Player ID copied!'),
+    'save-backup': () => copyText(saveCode(), 'Save code copied! Keep it somewhere safe.'),
+    'save-restore': () => {
+      const code = window.prompt('Paste your save code (it starts with PSW1-). Your current progress will be replaced.');
+      if (code === null) return;
+      if (restoreFromCode(code)) { toast('Progress restored!'); setTimeout(() => location.reload(), 700); }
+      else { fx('error'); toast('That save code is not valid'); }
+    },
     home: () => showScreen('menu'),
     store: () => showScreen('store'),
     buy: (el) => buy(el.dataset.item),
@@ -2700,9 +2850,8 @@
     // tap on the dark backdrop closes the pop-up
     if (openPopupEl && e.target === openPopupEl) return closePopup();
     const el = e.target.closest('[data-close], [data-toggle], [data-link], [data-action]');
-    if (el && el.dataset.action !== 'tap-block') PSAudio.sfx('tap');
+    if (el && el.dataset.action !== 'tap-block') fx('tap');
     if (!el) return;
-    haptic();
     if (el.hasAttribute('data-close')) return closePopup();
     if (el.dataset.toggle) return toggleSetting(el.dataset.toggle);
     if (el.dataset.link) return openLink(el.dataset.link);
@@ -2806,8 +2955,21 @@
   // music & sounds follow the Settings switches (they start on the player's first tap)
   PSAudio.setMusic(state.settings.music); PSAudio.setSfx(state.settings.sounds);
   PSAudio.music('menu'); // the home screen opens without showScreen(): ask for its music now (plays on the first tap)
-  // phone app: (re)schedule the "daily reward is ready" notification
-  PSNative.scheduleDailyReward(state.settings.notifications);
+  // phone app: reminders (daily reward, come back, event ending); tapping one opens the matching screen
+  PSNative.setupNotifications((kind) => {
+    if (kind === 'daily') { showScreen('menu'); openPopup('popup-activities'); }
+    if (kind === 'event') showScreen('events');
+  });
+  refreshReminders();
+  // leaving the game (app to background, tab hidden, closing): save now and re-plan the reminders from this moment
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { saveState(); refreshReminders(); } });
+  window.addEventListener('pagehide', () => saveState());
+  // browsers may clear site data when space is low: ask to keep the save (granted silently for installed/used sites)
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignore */ }
+  // phone app: if the WebView storage was wiped but the app storage still has the save, bring it back
+  if (PSNative.native && !localStorage.getItem(SAVE_KEY)) {
+    PSNative.storeGet(SAVE_KEY).then((v) => { if (v) { try { localStorage.setItem(SAVE_KEY, v); location.reload(); } catch (e) { /* ignore */ } } });
+  }
   // Dev shortcut: index.html#settings opens that screen directly (after the renderer is ready)
   let startAction = location.hash.slice(1);
   // dev: add "-still" (e.g. #story_last-still) to freeze animations for screenshots

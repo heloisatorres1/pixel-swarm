@@ -21,7 +21,10 @@ For Pixel Swarm I wrote the game design document, directed the art and owned the
 - **10 puzzle mechanics**, introduced one by one with a "New Feature" card: mystery blocks, frozen blocks (ice counter), linked blocks, mystery links, pipes, keys & locks, wood blocks + hammers, cookie blockers, big pixels and hidden pixels.
 - **Boosters:** Add Slot, Shuffle (never leaves you stuck), Wind, Free Pick; rewarded AD slots.
 - **Meta systems:** store and speed store, daily rewards and tasks, stat-based achievements, a gallery of every level, a skins wardrobe (6 bugs × 7 looks), profile, story cutscene, guided first level, age gate and special offers.
-- **Music and sound effects** synthesized live with the Web Audio API (no audio files).
+- **Music and sound effects** synthesized live with the Web Audio API (no audio files), paired with **haptics** (success / warning / error patterns on phones).
+- **Reliable saving:** two save slots (a broken write never loses progress), saving when the game goes to the background, durable app storage on Android, and a **save code** to back up progress or move it to another device.
+- **Sharing:** finished pictures become a share card (picture + link) for the phone's share sheet.
+- **Reminders (Android):** daily reward, "your bugs miss you" and event-ending notifications, with permission asked after the first win, not at launch.
 
 ## Quality & testing
 
@@ -31,6 +34,7 @@ The levels are generated procedurally, so "it looks fine" isn't enough: every le
 |---|---|
 | `#verify_all` (level checker) | All **87 levels are solvable**: each one is played instantly in solution order with the real rules. Also reports a **careless-player win rate** per difficulty against design targets, whether each puzzle type can be placed in every level, and visual rules (e.g. never two hidden "?" blocks in one column). |
 | `#pzsolve_<puzzle>` (playthroughs) | A bot plays a level with each puzzle **through the real animated game loop** until it wins. This caught a desync between the instant checker and the animated game that only showed up with the cookie blocker. |
+| `#featuretest` (simulated phone) | Checks saving (backup slot, recovery from a corrupted save, save codes), sharing (share sheet and fallback), vibration patterns and the notification schedule against **fake phone plugins** that record every call, so phone features are tested without a phone. |
 | `#clicktest` (real taps) | Taps puzzle tiles and the skins purchase flow **through the page, like a finger**. It caught a tap-handling clash that the bots (which call game functions directly) could not see. |
 | Layout probes and screenshots | Layout and "fits without scrolling" checks at several phone sizes; headless screenshots to compare screens against the design references. |
 | `PSAudio.measure()` | Renders the music and effects offline and measures their loudness, to balance the mix without relying on speakers. |
