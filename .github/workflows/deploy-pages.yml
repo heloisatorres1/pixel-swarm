@@ -1,4 +1,6 @@
 # Builds the game and publishes dist/ to GitHub Pages on every push to main.
+# The GitHub Pages site is the portfolio demo: it keeps the debug menu (DBG) on so reviewers can explore the
+# test tools. The official release (debug off) is the itch.io build: npm run package:itch.
 # One-time setup on GitHub: Settings → Pages → Source: "GitHub Actions".
 name: Deploy to GitHub Pages
 
@@ -25,7 +27,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: npm run build
+      - run: npm run build:debug
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

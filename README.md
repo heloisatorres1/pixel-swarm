@@ -45,7 +45,7 @@ The levels are generated procedurally, so "it looks fine" isn't enough: every le
 | Performance debug (`#perf`, `#perfbench`, `#perfstress`) | A live overlay (FPS, 1% low, frame-time graph, game-loop and render cost, memory, long tasks, scene and DOM counts) and a stress test (300 or 1000 extra bugs). The **benchmark lets the game play itself for 10 minutes**, level after level across every theme and difficulty, then reports frame-time percentiles, hitches, a **per-minute timeline** and a **memory-leak check** (heap, DOM and scene growth per minute), ready to copy into a bug ticket. The player's save is frozen during the run and restored after. `#perfbench_60` runs a shorter version headless. |
 | `PSAudio.measure()` | Renders the music and effects offline and measures their loudness, to balance the mix without relying on speakers. |
 
-Release builds turn the debug menu off; the shortcuts above are kept so the game can be tested anywhere.
+The GitHub Pages demo keeps the **debug menu on** (DBG button: cheats, logs, performance tools, notch simulation) so the test tooling can be explored; the official itch.io release turns it off. The URL shortcuts above work in both.
 
 ## Tech
 
