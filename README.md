@@ -1,33 +1,50 @@
 # 🐝 Pixel Swarm
 
-A cute casual puzzle game for mobile and web. Tiny bugs live inside the magical **Art-Tree**: send them out, color by color, to eat pixel-art pictures — but bugs can only eat what is uncovered from below, so the order matters.
+A cute casual puzzle game for mobile and web. Tiny bugs live inside the magical **Art-Tree**: send them out, color by color, to eat pixel-art pictures. Bugs can only reach what is uncovered, so the order you pick colors in is the whole puzzle.
 
-**▶ Play in your browser:** https://heloisatorres1.github.io/pixel-swarm/ · itch.io: _coming soon_
+**▶ Play in your browser:** https://heloisatorres1.github.io/pixel-swarm/
 
 ![Pixel Swarm main menu](docs/screenshots/main-menu.png)
 
+## About this project
+
+Portfolio project by **[@heloisatorres1](https://github.com/heloisatorres1)**, **Senior QA / Test Lead**.
+
+I wrote the game design document, directed the art and owned the product end to end, the way a small studio team would: from concept and level design to release on the web and a native Android build. Development was AI-assisted under my direction; quality was built in from the start, with automated checks for every system (see [Quality & testing](#quality--testing)).
+
 ## Features
 
-- **Core loop** — tap colored blocks into limited slots; bugs fly out of the tree, eat the matching pixels and carry them home.
-- **5 themes × 15 levels** (Easy → Medium → Hard) plus a **12-level Halloween event** with a pumpkin reward track.
-- **Procedural difficulty** — 12×12 pictures are upscaled (Scale2x/Scale3x) and shaded for Medium/Hard; colors are kept perceptually distinct (CIELAB ΔE ≥ 25).
-- **Always solvable** — levels are generated from a recorded winning order; a built-in checker verifies all 87 levels (`index.html#verify_all`).
-- **Puzzles & boosters** — mystery and frozen blocks, Add Slot, Shuffle (never leaves you stuck), Wind, Free Pick; AD slots.
-- **Meta systems** — store, speed store (time boosts + permanent speeds), daily rewards & tasks, achievements, gallery, skins, profile, age gate, special offers.
-- **Player aids** — faded blocks show colors that can't be eaten yet; tap a waiting slot to see what's in the way.
-- Debug/cheat menu in development builds.
+- **Core loop:** tap colored blocks into a few slots; bugs fly out of the tree, eat the matching pixels and carry them home. Fill every slot with colors that can't be reached and you're out of slots.
+- **87 levels:** 5 themes × 15 levels (Easy → Medium → Hard) plus a 12-level **Halloween event** with a pumpkin reward track.
+- **10 puzzle mechanics**, introduced one by one with a "New Feature" card: mystery blocks, frozen blocks (ice counter), linked blocks, mystery links, pipes, keys & locks, wood blocks + hammers, cookie blockers, big pixels and hidden pixels.
+- **Boosters:** Add Slot, Shuffle (never leaves you stuck), Wind, Free Pick; rewarded AD slots.
+- **Meta systems:** store and speed store, daily rewards and tasks, stat-based achievements, a gallery of every level, a skins wardrobe (6 bugs × 7 looks), profile, story cutscene, guided first level, age gate and special offers.
+- **Music and sound effects** synthesized live with the Web Audio API (no audio files).
+
+## Quality & testing
+
+The levels are generated procedurally, so "it looks fine" isn't enough: every level and mechanic is checked automatically with the game's own rules. Each check runs in the browser from a URL shortcut and also runs headless.
+
+| Check | What it proves |
+|---|---|
+| `#verify_all` (level checker) | All **87 levels are solvable**: each one is played instantly in solution order with the real rules. Also reports a **careless-player win rate** per difficulty against design targets, whether each puzzle type can be placed in every level, and visual rules (e.g. never two hidden "?" blocks in one column). |
+| `#pzsolve_<puzzle>` (playthroughs) | A bot plays a level with each puzzle **through the real animated game loop** until it wins. This caught a desync between the instant checker and the animated game that only showed up with the cookie blocker. |
+| `#clicktest` (real taps) | Taps puzzle tiles and the skins purchase flow **through the page, like a finger**. It caught a tap-handling clash that the bots (which call game functions directly) could not see. |
+| Layout probes and screenshots | Layout and "fits without scrolling" checks at several phone sizes; headless screenshots to compare screens against the design references. |
+| `PSAudio.measure()` | Renders the music and effects offline and measures their loudness, to balance the mix without relying on speakers. |
+
+Release builds turn the debug menu off; the shortcuts above are kept so the game can be tested anywhere.
 
 ## Tech
 
 | | |
 |---|---|
-| Rendering | Hybrid: **PixiJS 8** (WebGL) draws the gameplay — picture board, flying bugs, wind effect — while menus, store and pop-ups are HTML/CSS. Falls back to a 2D canvas if WebGL is unavailable |
-| Code | Vanilla JavaScript (no bundler), ~2k lines; `js/pixi-render.js` renderer, `js/native.js` phone features |
-| Native features | Capacitor Haptics (vibration) + Local Notifications ("daily reward is ready") |
-| Build | Node scripts → `dist/` (release builds disable the debug menu) |
-| Web | GitHub Pages (GitHub Actions) · itch.io (HTML5 zip) |
-| Mobile | Capacitor → Android (iOS possible with a Mac) |
-| Art | AI-generated sprite sheets (ChatGPT) sliced with custom tools in `tools/` |
+| Rendering | Hybrid: **PixiJS 8** (WebGL) draws the gameplay (picture board, flying bugs, effects); menus, store and pop-ups are HTML/CSS. Falls back to a 2D canvas without WebGL |
+| Code | Vanilla JavaScript, no framework or bundler (~5.5k lines) |
+| Audio | Web Audio API: two music loops and ~18 synthesized sound effects |
+| Native | Capacitor → Android, with haptics and local notifications |
+| Build & deploy | Node build scripts → `dist/`; GitHub Actions publishes to GitHub Pages on every push to `main` |
+| Art | AI-generated images, art-directed and processed with the PowerShell tools in `tools/` |
 
 ## Run locally
 
@@ -36,30 +53,27 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Dev shortcuts: `#game`, `#game_medium`, `#game_hard`, `#events`, `#autoplay`, `#solve_hard`, `#verify_all`.
+Useful shortcuts (add to the URL): `#game`, `#game_hard`, `#events`, `#skins`, `#puzzle_key`, `#autoplay`, `#verify_all`, `#clicktest`.
 
-## Build & publish
+## Build
 
 ```bash
 npm run build          # release build → dist/
-npm run package:itch   # → release/pixel-swarm-itch-vX.Y.Z.zip (upload to itch.io as HTML)
+npm run package:itch   # zip for itch.io (HTML5)
 npm run android:sync   # build + copy into the Android project
-npm run android:open   # open in Android Studio → Run ▶ or Build › Generate Signed Bundle/APK
+npm run android:open   # open in Android Studio
 ```
-
-GitHub Pages deploys automatically on every push to `main` (`.github/workflows/deploy-pages.yml`).
 
 ## Project structure
 
 ```
 index.html, css/, js/, assets/   the game
 scripts/                         build, dev server, itch packaging
-tools/                           sprite-sheet slicer & cut-out tools (PowerShell)
-prompts/                         ChatGPT prompts used for the art
-docs/                            competitor study, screenshots
+tools/                           sprite cutting and slicing tools (PowerShell)
+docs/                            competitor level study, screenshots
 android/                         Capacitor Android project
 ```
 
 ## Credits
 
-See [CREDITS.md](CREDITS.md). Game design document and art direction by the author.
+See [CREDITS.md](CREDITS.md).

@@ -1,17 +1,21 @@
-# Pixel Swarm — Asset Credits
+# Pixel Swarm — Credits
+
+## Art
 
 | Asset | Source | License |
 |---|---|---|
-| Game sprites (`assets/sprites/*.png`) | Generated with ChatGPT from `prompts/chatgpt-asset-pack.md`, sliced with `tools/slice-sheet.ps1` (source: `downloads/sheet1.png`) | Owned by the project per OpenAI's terms; AI images may have limited copyright protection |
-| Main menu / gameplay background (`assets/bg/menu.jpg`) | Generated with ChatGPT (source `downloads/background_v3.png`; earlier version kept as `downloads/background_v1_menu.jpg`) | Same as above |
-| Logo (`assets/sprites/logo.png`) and butterfly (`assets/sprites/butterfly.png`) | Generated with ChatGPT (sources `downloads/screens/01_logo.png`, `downloads/butterfly_v2.png`) | Same as above |
+| Characters, UI, backgrounds, story art, puzzle pieces, event and skins screens (`assets/`) | AI-generated images (ChatGPT image generation), art-directed by the author and cut out / sized with the project's own tools in `tools/` | Owned by the project per OpenAI's terms; AI images may have limited copyright protection |
 | Pixel-art level pictures | Drawn in code from the grids in `js/data.js` | Project's own |
 | Lilita One font | [Google Fonts](https://fonts.google.com/specimen/Lilita+One) by Juan Montoreano | SIL Open Font License 1.1 |
 | Fredoka font | [Google Fonts](https://fonts.google.com/specimen/Fredoka) by Milena Brandão, Hafontia | SIL Open Font License 1.1 |
-| Old style comparison images (`assets/img/*.png`, used only by `art-options.html`) | [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) by Microsoft | MIT |
-
-To re-slice a new sheet: `tools/slice-sheet.ps1 -Sheet downloads\sheet2.png -OutDir assets\sprites`
 
 ## Music & sound effects
 
 All music and sound effects are synthesized live in the browser with the Web Audio API (`js/audio.js`). They are original to this project: no audio files, no third-party licences.
+
+## Libraries
+
+| Library | Use | License |
+|---|---|---|
+| [PixiJS](https://pixijs.com/) 8 | WebGL rendering of the gameplay | MIT |
+| [Capacitor](https://capacitorjs.com/) (+ Haptics, Local Notifications) | Android build, vibration, notifications | MIT |

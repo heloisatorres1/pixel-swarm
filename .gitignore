@@ -3,7 +3,7 @@ node_modules/
 dist/
 release/
 
-# design sources (large ChatGPT mockups & raw images) — kept locally, not in the repo
+# design sources (large mockups & raw images) — kept locally, not in the repo
 downloads/
 
 # editor / OS
@@ -11,3 +11,7 @@ downloads/
 .DS_Store
 Thumbs.db
 *.log
+
+# IDE settings (personal)
+.idea/
+android/.idea/
