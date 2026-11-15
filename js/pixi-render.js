@@ -43,6 +43,18 @@ window.PSRender = (function () {
   const NO_BEE = { set() {}, carry() {}, destroy() {} };
   // explicit redraw (keeps things correct even when the browser skips animation frames)
   function frame() { if (app) app.render(); }
+  // picture of the gameplay layer for screenshots (bug reports). Reading the screen canvas directly can give a blank
+  // image on real GPUs (the browser may have cleared it already), so PixiJS draws the stage again into its own canvas.
+  function snapshot() {
+    if (!app) return null;
+    try {
+      const c = app.renderer.extract.canvas({ target: app.stage, frame: new PIXI.Rectangle(0, 0, app.screen.width, app.screen.height),
+        resolution: app.renderer.resolution });
+      return c.toDataURL('image/png');
+    } catch (e) {
+      try { app.render(); return app.canvas.toDataURL('image/png'); } catch (e2) { return null; }
+    }
+  }
   function resize() { if (app) { app.resize(); frame(); } }
 
   // ---------- board ----------
@@ -259,5 +271,5 @@ window.PSRender = (function () {
     return n;
   }
 
-  return { init, preload, frame, resize, setBoard, syncBoard, spawnBee, clearBees, wind, stats, stress, get ready() { return !!app; } };
+  return { init, preload, frame, resize, setBoard, syncBoard, spawnBee, clearBees, wind, stats, stress, snapshot, get ready() { return !!app; } };
 })();

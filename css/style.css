@@ -1294,10 +1294,6 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .wd-card .wd-btn.locked { -webkit-text-stroke: 0; color: #6d6a5a; font-size: 12px; }
 
 /* Settings: back up / restore the save (save code) */
-.save-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 800; color: #6b3a12; }
-.save-row span:first-child { flex: 1; }
-.save-row .gbtn.small { height: 32px; padding: 0 10px; }
-.save-row .gbtn.small span { font-size: 14px; }
 
 /* ---------- Report a problem (js/report.js) ---------- */
 .popup.report { max-width: 400px; }
@@ -1313,6 +1309,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .rp-input:focus { outline: none; border-color: #c47a35; box-shadow: 0 0 0 3px rgba(196,122,53,.25); }
 .rp-input.mono { font: 12px/1.4 ui-monospace, Consolas, monospace; }
 .rp-shot { display: block; width: 100%; height: auto; border-radius: 12px; border: 2px solid #d9a868; touch-action: none; cursor: crosshair; }
+.rp-shot[hidden], .rp-row[hidden] { display: none; }
 .rp-row { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
 .rp-check { display: flex; align-items: center; gap: 6px; margin-top: 6px; font: 500 13px "Fredoka"; color: #5a3416; }
 .rp-check input { width: 18px; height: 18px; accent-color: #c47a35; }
@@ -1323,6 +1320,8 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .rp-send { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
 .rp-send .gbtn.small { width: 100%; }
 .rp-send .gbtn.small span { font-size: 18px; }
+.rp-send.one { grid-template-columns: 1fr; justify-items: center; }
+.rp-send.one .gbtn[disabled] { filter: saturate(.6); }
 .rp-msg { min-height: 18px; margin: 8px 0 0; text-align: center; font: 600 13px "Fredoka"; color: #2f6b12; }
 
 /* ---------- Debug pop-up tabs + Logs tab ---------- */

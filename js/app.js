@@ -81,7 +81,6 @@
   // Fill these in when the pages exist (e.g. 'https://yoursite.com/privacy').
   // While empty, the buttons show a "coming soon" message.
   const LINKS = { privacy: '', terms: '' };
-  const ISSUES_URL = 'https://github.com/heloisatorres1/pixel-swarm/issues/new'; // the report tool's "GitHub" button
 
   // ---- SAVING ----
   // The save is written to two slots (main + backup) so a broken write never loses progress; the phone app also
@@ -2562,6 +2561,14 @@
   const DEBUG_CMDS = {
     perf: () => toast(PSPerf.toggle() ? 'Performance overlay ON' : 'Performance overlay OFF'),
     report: () => openReport(),
+    // save codes (testers): copy this progress, or load the one attached to a bug report
+    save_copy: () => copyText(saveCode(), 'Save code copied'),
+    save_load: () => {
+      const code = window.prompt('Paste a save code (it starts with PSW1-). The current progress will be replaced.');
+      if (code === null) return;
+      if (restoreFromCode(code)) { toast('Save loaded!'); setTimeout(() => location.reload(), 700); }
+      else { fx('error'); toast('That save code is not valid'); }
+    },
     perf_bench: () => perfAutoplay(600),
     perf_stress: () => { PSPerf.show(true); toast(PSPerf.setStress(300) ? '+300 bugs on screen' : 'Stress test needs WebGL'); },
     win: () => { if (!inGame()) return; clearBees(); game.bees = []; game.over = true; showWin(3); },
@@ -2619,7 +2626,7 @@
   function runCheat(cmd) {
     closePopup(true);
     DEBUG_CMDS[cmd]();
-    if (!cmd.startsWith('p_') && !cmd.startsWith('perf') && !['win', 'lose', 'solve', 'speed', 'reset', 'report'].includes(cmd)) refreshAfterCheat();
+    if (!cmd.startsWith('p_') && !cmd.startsWith('perf') && !['win', 'lose', 'solve', 'speed', 'reset', 'report', 'save_copy', 'save_load'].includes(cmd)) refreshAfterCheat();
   }
 
   // ---------- Click handling ----------
@@ -2689,13 +2696,15 @@
       check('errors captured', r.recentErrors.some((e) => /sample error/.test(e.msg)));
       check('save code', /^PSW1-/.test(r.save || ''));
       check('severity in QA terms', ['Blocker', 'Major', 'Minor', 'Trivial'].includes(r.severity));
-      const html = PSReport.htmlFile(r, c.toDataURL('image/png'));
-      const json = JSON.parse(new DOMParser().parseFromString(html, 'text/html').getElementById('report-data').textContent);
-      check('download file', json.id === r.id && html.includes('<img src="data:image/png'));
-      check('markdown', PSReport.markdown(r).includes('### Steps to reproduce'));
       // a title is required before sending
-      $('rp-title').value = ''; document.querySelector('#popup-report [data-send="download"]').click();
-      check('title required', /title/i.test($('rp-msg').textContent));
+      $('rp-title').value = ''; document.querySelector('#popup-report [data-send]').click();
+      check('title required', /title/i.test($('rp-msg').textContent) && !PSReport.lastReport);
+      // Send (simulated): report kept, logged, pop-up closes
+      $('rp-title').value = 'Test report'; document.querySelector('#popup-report [data-send]').click();
+      await wait(2400);
+      const sent = PSReport.lastReport;
+      check('send', sent && sent.title === 'Test report' && sent.screenshot === 'attached (PNG)' && $('popup-report').hidden
+        && PSReport.log.some((l) => l.kind === 'report' && l.msg.includes(sent.id)), sent && sent.id);
       document.body.dataset.reporttest = JSON.stringify(res);
     },
     perfbench: () => perfAutoplay(600),
@@ -2986,13 +2995,6 @@
     'claim-task': (el) => claimTask(el.dataset.task),
     settings: () => { renderSettings(); openPopup('popup-settings'); },
     'copy-id': () => copyText(state.playerId, 'Player ID copied!'),
-    'save-backup': () => copyText(saveCode(), 'Save code copied! Keep it somewhere safe.'),
-    'save-restore': () => {
-      const code = window.prompt('Paste your save code (it starts with PSW1-). Your current progress will be replaced.');
-      if (code === null) return;
-      if (restoreFromCode(code)) { toast('Progress restored!'); setTimeout(() => location.reload(), 700); }
-      else { fx('error'); toast('That save code is not valid'); }
-    },
     home: () => showScreen('menu'),
     store: () => showScreen('store'),
     buy: (el) => buy(el.dataset.item),
@@ -3175,8 +3177,8 @@
   PSPerf.setInfo(() => ({ screen: currentScreen, level: currentScreen === 'game' && game ? game.key : '',
     bugs: game && currentScreen === 'game' ? game.bees.length : 0, menuBugs: bees.length }));
   PSPerf.setBench(() => perfAutoplay(600));
-  PSReport.init({ openPopup, toast, copyText, share: PSNative.share, context: reportContext, saveCode,
-    platform: () => (PSNative.native ? 'Android app' : 'web'), version: APP_VERSION, build: DEBUG ? 'debug' : 'release', issuesUrl: ISSUES_URL });
+  PSReport.init({ openPopup, closePopup: () => closePopup(true), toast, copyText, share: PSNative.share, context: reportContext, saveCode,
+    platform: () => (PSNative.native ? 'Android app' : 'web'), version: APP_VERSION, build: DEBUG ? 'debug' : 'release' });
   // DBG button shows how many errors happened this session (DBG › Logs tab to read them)
   PSReport.onLog((c) => {
     const b = $('dbg-btn'); if (!b) return;

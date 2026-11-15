@@ -5,15 +5,14 @@
    - attached automatically: game state (screen, level, slots, pixels left…), device and build, performance numbers,
      the last actions (used to pre-fill the steps) and the last errors, plus, optionally, a save code so the
      team can load the exact progress.
-   No personal information is collected. The report can be shared (share sheet), downloaded as a single HTML file
-   (readable anywhere, with the data embedded as JSON), copied as Markdown or opened as a GitHub issue. */
+   No personal information is collected. Sending is simulated (there is no server): Send builds the full report,
+   writes a line to the log (Debug › Logs) and keeps the last report in PSReport.lastReport. */
 window.PSReport = (function () {
   'use strict';
   const MAX_CRUMBS = 40, MAX_ERRORS = 20, MAX_LOG = 300, LOG_KEY = 'pixelswarm.log';
   const crumbs = [], errors = [];
   const t0 = Date.now();
-  let cfg = null, shot = null, shotCanvas = null, ink = null, current = null, h2cLoading = null;
-
+  let cfg = null, shot = null, shotCanvas = null, ink = null, current = null;
   // ---------- the log: errors, warnings, info and player actions ----------
   // Kept in local storage (the last 300 lines), so after a crash or reload the previous session's log is still there.
   const stamp = () => { const s = Math.round((Date.now() - t0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -60,36 +59,44 @@ window.PSReport = (function () {
   addLog('info', `session start · ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, '')}`, 'session');
 
   // ---------- screenshot ----------
-  function loadH2C() {
-    if (window.html2canvas) return Promise.resolve();
-    if (!h2cLoading) h2cLoading = new Promise((ok, no) => {
-      const s = document.createElement('script'); s.src = 'js/vendor/html2canvas.min.js'; s.onload = ok; s.onerror = no;
+  // html-to-image has the browser itself draw the page (through an SVG), so shadows, gradients and rounded corners
+  // look exactly as on screen. It is loaded only when the report tool opens.
+  let libLoading = null;
+  function loadLib() {
+    if (window.htmlToImage) return Promise.resolve();
+    if (!libLoading) libLoading = new Promise((ok, no) => {
+      const s = document.createElement('script'); s.src = 'js/vendor/html-to-image.min.js'; s.onload = ok; s.onerror = no;
       document.head.appendChild(s);
     });
-    return h2cLoading;
+    return libLoading;
   }
-  // The WebGL layer can't be read by html2canvas: draw a fresh frame, copy it right away and put the copy in its place.
+  // The WebGL gameplay layer can't be copied like the rest of the page: during the capture a PixiJS snapshot of it
+  // sits in its place (same position and size) and the canvas itself is left out.
   async function capture() {
     const root = document.getElementById('app');
     const gl = root.querySelector('canvas.pixi-layer');
-    let glURL = null;
-    if (gl && gl.offsetParent !== null && window.PSRender) { PSRender.frame(); try { glURL = gl.toDataURL('image/png'); } catch (e) { /* ignore */ } }
+    let stand = null;
+    if (gl && gl.offsetParent !== null && window.PSRender && PSRender.snapshot) {
+      const url = PSRender.snapshot();
+      if (url) {
+        stand = document.createElement('img');
+        stand.className = gl.className; stand.style.cssText = gl.style.cssText; stand.alt = '';
+        stand.style.width = gl.style.width || gl.clientWidth + 'px'; stand.style.height = gl.style.height || gl.clientHeight + 'px';
+        stand.src = url;
+        try { await stand.decode(); } catch (e) { /* draw it anyway */ }
+        gl.after(stand);
+      }
+    }
     try {
-      await loadH2C();
-      return await window.html2canvas(root, {
-        backgroundColor: '#3a2412', logging: false, scale: Math.min(1.5, window.devicePixelRatio || 1),
-        ignoreElements: (el) => el.id === 'popup-report' || el.id === 'toast' || (el.classList && el.classList.contains('perf-hud')),
-        onclone: (doc) => {
-          const c = doc.querySelector('canvas.pixi-layer');
-          if (!c) return;
-          if (!glURL) { c.remove(); return; }
-          const img = doc.createElement('img');
-          img.src = glURL; img.className = c.className; img.style.cssText = c.style.cssText;
-          img.style.width = gl.style.width || gl.clientWidth + 'px'; img.style.height = gl.style.height || gl.clientHeight + 'px';
-          c.replaceWith(img);
-        },
+      await loadLib();
+      return await window.htmlToImage.toCanvas(root, {
+        pixelRatio: Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1))), backgroundColor: '#3a2412',
+        // left out: the WebGL canvas, this tool, toasts, the perf overlay and images with no picture (an empty <img> makes the capture fail)
+        filter: (n) => !(n === gl || n.id === 'popup-report' || n.id === 'toast' || (n.classList && n.classList.contains('perf-hud'))
+          || (n.tagName === 'IMG' && (!n.complete || !n.naturalWidth))),
       });
-    } catch (e) { logError('report', 'screenshot failed: ' + (e && e.message)); return null; }
+    } catch (e) { logError('report', 'screenshot failed: ' + (e && e.message ? e.message : e)); return null; }
+    finally { if (stand) stand.remove(); }
   }
 
   // ---------- the form ----------
@@ -113,6 +120,7 @@ window.PSReport = (function () {
     if (!cfg) return;
     current = { type: opts.type || 'bug', severity: opts.severity || 'minor', context: cfg.context(), at: new Date() };
     // the screenshot shows the moment before the report opened
+    cfg.toast('Taking a screenshot…');
     shotCanvas = await capture();
     cfg.openPopup('popup-report');
     chips('rp-type', TYPES, current.type);
@@ -166,55 +174,6 @@ window.PSReport = (function () {
   }
   const screenshotURL = () => (shotCanvas && $('rp-shot-on').checked ? $('rp-shot').toDataURL('image/png') : null);
 
-  function table(obj) {
-    return Object.entries(obj || {}).filter(([, v]) => v !== null && v !== undefined && v !== '')
-      .map(([k, v]) => `| ${k} | ${typeof v === 'object' ? JSON.stringify(v) : v} |`).join('\n');
-  }
-  function markdown(r, { short = false } = {}) {
-    const out = [
-      `**${r.type} · ${r.severity}** · Report ${r.id} · v${r.build.version} (${r.build.build}, ${r.build.platform})`, '',
-      '### What happened', r.whatHappened || '_not filled in_', '',
-      '### Expected', r.expected || '_not filled in_', '',
-      '### Steps to reproduce', r.steps || '_not filled in_', '',
-      '### Game state', '| | |', '|---|---|', table(r.game), '',
-      '### Device', '| | |', '|---|---|', table(r.device), '',
-    ];
-    if (r.performance) out.push('### Performance', '| | |', '|---|---|', table(r.performance), '');
-    out.push('### Recent errors', r.recentErrors.length ? r.recentErrors.map((e) => `- \`${e.at}\` ${e.kind}: ${e.msg}`).join('\n') : 'None', '');
-    const acts = short ? r.recentActions.slice(-15) : r.recentActions;
-    out.push('### Recent actions', acts.map((c) => `- \`${c.at}\` ${c.text}${c.n ? ` ×${c.n}` : ''}`).join('\n') || 'None', '');
-    if (r.save && !short) out.push('<details><summary>Save code (Settings › Restore loads this progress)</summary>', '', '```', r.save, '```', '</details>');
-    return out.join('\n');
-  }
-  // one self-contained file: readable report + screenshot + the raw data as JSON
-  function htmlFile(r, img) {
-    const sec = (h, body) => `<h2>${h}</h2>${body}`;
-    const rows = (o) => `<table>${Object.entries(o || {}).filter(([, v]) => v !== null && v !== '').map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(typeof v === 'object' ? JSON.stringify(v) : v)}</td></tr>`).join('')}</table>`;
-    const pre = (t) => `<pre>${esc(t || 'not filled in')}</pre>`;
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(r.id)} ${esc(r.title)}</title><style>
-body{margin:0;background:#f6efe4;color:#3a2412;font:15px/1.5 system-ui,sans-serif}main{max-width:900px;margin:0 auto;padding:20px 16px}
-h1{margin:0 0 4px;font-size:24px}h2{margin:26px 0 8px;font-size:17px;border-bottom:2px solid #e2c99f;padding-bottom:4px}
-.tag{display:inline-block;margin-right:6px;padding:2px 10px;border-radius:12px;background:#c47a35;color:#fff;font-size:13px;font-weight:600}
-.tag.sev{background:#b3261e}.meta{color:#7a5a3a;font-size:13px}.grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px}
-@media(max-width:700px){.grid{grid-template-columns:1fr}}img{width:100%;border-radius:10px;border:2px solid #e2c99f}
-pre{white-space:pre-wrap;background:#fff;padding:10px 12px;border-radius:8px;margin:0;font:14px/1.45 system-ui,sans-serif}
-table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;font-size:13px}th,td{text-align:left;vertical-align:top;padding:5px 10px;border-bottom:1px solid #f0e3cc}
-th{width:30%;color:#7a5a3a;font-weight:600}td{word-break:break-word}ol{margin:0;padding-left:20px;background:#fff;border-radius:8px;padding:8px 8px 8px 32px;font-size:13px}
-code{font-size:12px;color:#7a5a3a}textarea{width:100%;height:80px;font:11px monospace;box-sizing:border-box}</style></head><body><main>
-<p class="meta">Pixel Swarm report ${esc(r.id)} · ${esc(new Date(r.createdAt).toLocaleString())} · v${esc(r.build.version)} (${esc(r.build.build)}, ${esc(r.build.platform)})</p>
-<h1>${esc(r.title)}</h1><p><span class="tag">${esc(r.type)}</span><span class="tag sev">${esc(r.severity)}</span></p>
-<div class="grid"><div>
-${sec('What happened', pre(r.whatHappened))}${sec('Expected', pre(r.expected))}${sec('Steps to reproduce', pre(r.steps))}
-${sec('Game state', rows(r.game))}${r.performance ? sec('Performance', rows(r.performance)) : ''}${sec('Device', rows(r.device))}
-${sec('Recent errors', r.recentErrors.length ? `<ol>${r.recentErrors.map((e) => `<li><code>${esc(e.at)}</code> ${esc(e.kind)}: ${esc(e.msg)}</li>`).join('')}</ol>` : '<p>None</p>')}
-${sec('Recent actions', `<ol>${r.recentActions.map((c) => `<li><code>${esc(c.at)}</code> ${esc(c.text)}${c.n ? ` ×${c.n}` : ''}</li>`).join('')}</ol>`)}
-${r.save ? sec('Save code', '<p class="meta">Paste in Settings › Restore to load this progress.</p><textarea readonly>' + esc(r.save) + '</textarea>') : ''}
-</div><div>${img ? sec('Screenshot', `<img src="${img}" alt="Screenshot">`) : ''}</div></div>
-<script type="application/json" id="report-data">${JSON.stringify(r).replace(/</g, '\\u003c')}</script>
-</main></body></html>`;
-  }
-
   // ---------- sending ----------
   function needTitle() {
     if ($('rp-title').value.trim()) return false;
@@ -228,36 +187,25 @@ ${r.save ? sec('Save code', '<p class="meta">Paste in Settings › Restore to lo
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
-  const fileName = (r) => `pixel-swarm-report-${r.id}.html`;
-  const done = (how) => { $('rp-msg').textContent = how; cfg.toast('Thanks for the report!'); crumb('report', how); };
-
-  const SEND = {
-    download() {
-      const r = build();
-      download(fileName(r), new Blob([htmlFile(r, screenshotURL())], { type: 'text/html' }));
-      done(`Saved ${fileName(r)}`);
-    },
-    async copy() {
-      const r = build();
-      cfg.copyText(`## ${r.title}\n\n${markdown(r)}`, 'Report copied');
-      done('Copied as Markdown (screenshot not included: use Download)');
-    },
-    async share() {
-      const r = build();
-      const res = await cfg.share({ title: `Pixel Swarm report: ${r.title}`, text: `${r.title}\n\n${markdown(r, { short: true })}`,
-        image: $('rp-shot-on').checked ? $('rp-shot') : null, fileName: `${r.id}.png` });
-      if (res === 'shared') done('Shared');
-      else if (res === 'unsupported') SEND.download();
-    },
-    github() {
-      const r = build();
-      let body = markdown(r, { short: true }) + '\n\n_Screenshot: attach the file from the report tool’s Download button._';
-      if (body.length > 6000) body = body.slice(0, 6000) + '\n…(cut: use Download for the full report)';
-      const url = `${cfg.issuesUrl}?title=${encodeURIComponent(`[${r.type}][${r.severity}] ${r.title}`)}&body=${encodeURIComponent(body)}`;
-      window.open(url, '_blank', 'noopener');
-      done('Opened a GitHub issue');
-    },
-  };
+  // Send (simulated): the report is built exactly as it would be uploaded, then logged instead of sent
+  let lastReport = null, sending = false;
+  function send() {
+    if (sending || needTitle()) return;
+    sending = true;
+    const r = build();
+    r.screenshot = screenshotURL() ? 'attached (PNG)' : 'none';
+    lastReport = r;
+    const btn = document.querySelector('#popup-report [data-send]');
+    btn.disabled = true; btn.querySelector('span').textContent = 'Sending…';
+    setTimeout(() => {
+      addLog('info', `report ${r.id} sent (simulated): [${r.type} · ${r.severity}] "${r.title}"`, 'report');
+      crumb('report', `sent report ${r.id}`);
+      $('rp-msg').textContent = `Report sent! Reference ${r.id}`;
+      btn.querySelector('span').textContent = 'Sent ✓';
+      cfg.toast('Thanks for the report!');
+      setTimeout(() => { btn.disabled = false; btn.querySelector('span').textContent = 'Send'; sending = false; cfg.closePopup(); }, 1400);
+    }, 700);
+  }
 
   // what gets attached, shown before sending
   function renderIncluded() {
@@ -281,8 +229,7 @@ ${r.save ? sec('Save code', '<p class="meta">Paste in Settings › Restore to lo
         if (box.id === 'rp-type') current.type = chip.dataset.v; else current.severity = chip.dataset.v;
         return;
       }
-      const send = e.target.closest('[data-send]');
-      if (send) { if (send.dataset.send === 'copy' || !needTitle()) SEND[send.dataset.send](); return; }
+      if (e.target.closest('[data-send]')) { send(); return; }
       if (e.target.closest('#rp-clear-ink')) clearInk();
     });
     const c = $('rp-shot');
@@ -355,9 +302,9 @@ ${r.save ? sec('Save code', '<p class="meta">Paste in Settings › Restore to lo
   }
 
   return {
-    // config: { openPopup, toast, copyText, share, context(), saveCode(), platform(), version, build, issuesUrl }
+    // config: { openPopup, closePopup, toast, copyText, share, context(), saveCode(), platform(), version, build }
     init(config) { cfg = config; bind(); bindLogs(); },
-    open, crumb, logError, build, markdown, htmlFile, openLogs, logText,
+    open, crumb, logError, build, openLogs, logText, get lastReport() { return lastReport; },
     info: (msg) => addLog('info', msg, 'game'),
     onLog(fn) {
       logListener = () => {

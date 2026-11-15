@@ -570,12 +570,6 @@
               <span>Player ID: <span id="ui-player-id">----</span></span>
               <button class="gbtn green small" data-action="copy-id"><span>Copy</span></button>
             </div>
-            <!-- save code: back up progress or move it to another device -->
-            <div class="save-row">
-              <span>Progress</span>
-              <button class="gbtn blue small" data-action="save-backup"><span>Back up</span></button>
-              <button class="gbtn gray small" data-action="save-restore"><span>Restore</span></button>
-            </div>
             <div class="version">Version <span id="ui-version">1.0.0</span></div>
           </div>
         </div>
@@ -637,11 +631,8 @@
           </div>
           <label class="rp-check"><input type="checkbox" id="rp-save-on" checked> Include my progress (helps reproduce it)</label>
           <details class="rp-details"><summary>Added automatically</summary><pre id="rp-included"></pre></details>
-          <div class="rp-send">
-            <button type="button" class="gbtn green small" data-send="share"><span>Share</span></button>
-            <button type="button" class="gbtn blue small" data-send="download"><span>Download</span></button>
-            <button type="button" class="gbtn blue small" data-send="copy"><span>Copy</span></button>
-            <button type="button" class="gbtn blue small" data-send="github"><span>GitHub</span></button>
+          <div class="rp-send one">
+            <button type="button" class="gbtn green" data-send><span>Send</span></button>
           </div>
           <p class="rp-msg" id="rp-msg" role="status"></p>
         </div>
@@ -684,6 +675,8 @@
             <button data-action="dbg" data-cmd="levelup">Player level +1</button>
             <button data-action="dbg" data-cmd="xp">Player level 20</button>
             <button data-action="dbg" data-cmd="progress0">Reset level progress</button>
+            <button data-action="dbg" data-cmd="save_copy">Copy save code</button>
+            <button data-action="dbg" data-cmd="save_load">Load a save code</button>
           </div>
           <h4>Activities &amp; events</h4>
           <div class="dbg-grid">

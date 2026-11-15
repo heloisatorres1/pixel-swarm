@@ -18,5 +18,5 @@ All music and sound effects are synthesized live in the browser with the Web Aud
 | Library | Use | License |
 |---|---|---|
 | [PixiJS](https://pixijs.com/) 8 | WebGL rendering of the gameplay | MIT |
-| [html2canvas](https://html2canvas.hertzen.com/) 1.4.1 | Screenshots for the in-game report tool | MIT |
+| [html-to-image](https://github.com/bubkoo/html-to-image) 1.11.11 | Screenshots for the in-game report tool | MIT |
 | [Capacitor](https://capacitorjs.com/) (+ Haptics, Local Notifications) | Android build, vibration, notifications | MIT |
