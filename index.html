@@ -562,7 +562,7 @@
           <div class="wood-list">
             <button class="wood-btn" data-link="privacy">Privacy Policy</button>
             <button class="wood-btn" data-link="terms">Terms of Service</button>
-            <button class="wood-btn" data-link="feedback">Feedback</button>
+            <button class="wood-btn" data-action="report">Report</button>
           </div>
 
           <div class="info-box">
@@ -611,6 +611,43 @@
 
     <!-- ============ DEBUG (cheats for testing; turn off with DEBUG = false in js/app.js) ============ -->
     <button class="dbg-btn" id="dbg-btn" data-action="debug" hidden>DBG</button>
+    <!-- ============ REPORT A PROBLEM (js/report.js) ============ -->
+    <div class="overlay" id="popup-report" hidden>
+      <div class="popup report" role="dialog" aria-modal="true" aria-labelledby="report-title">
+        <div class="ribbon"><h2 id="report-title">Report</h2></div>
+        <button class="close-btn" data-close aria-label="Close">X</button>
+        <div class="popup-body">
+          <label class="rp-label">What kind of problem?</label>
+          <div class="rp-chips" id="rp-type"></div>
+          <label class="rp-label">How bad is it?</label>
+          <div class="rp-chips" id="rp-sev"></div>
+          <label class="rp-label" for="rp-title">Title</label>
+          <input id="rp-title" class="rp-input" maxlength="90" placeholder="e.g. Bees stop flying after a booster" autocomplete="off">
+          <label class="rp-label" for="rp-what">What happened?</label>
+          <textarea id="rp-what" class="rp-input" rows="3" placeholder="Describe what you saw"></textarea>
+          <label class="rp-label" for="rp-expected">What did you expect?</label>
+          <textarea id="rp-expected" class="rp-input" rows="2" placeholder="What should have happened instead"></textarea>
+          <label class="rp-label" for="rp-steps">Steps to reproduce <small>(filled in from your last actions, edit as needed)</small></label>
+          <textarea id="rp-steps" class="rp-input mono" rows="5"></textarea>
+          <label class="rp-label">Screenshot <small>(draw on it to point at the problem)</small></label>
+          <canvas id="rp-shot" class="rp-shot" aria-label="Screenshot of the game"></canvas>
+          <div class="rp-row" id="rp-shot-tools">
+            <label class="rp-check"><input type="checkbox" id="rp-shot-on" checked> Include screenshot</label>
+            <button type="button" class="rp-link" id="rp-clear-ink">Clear marks</button>
+          </div>
+          <label class="rp-check"><input type="checkbox" id="rp-save-on" checked> Include my progress (helps reproduce it)</label>
+          <details class="rp-details"><summary>Added automatically</summary><pre id="rp-included"></pre></details>
+          <div class="rp-send">
+            <button type="button" class="gbtn green small" data-send="share"><span>Share</span></button>
+            <button type="button" class="gbtn blue small" data-send="download"><span>Download</span></button>
+            <button type="button" class="gbtn blue small" data-send="copy"><span>Copy</span></button>
+            <button type="button" class="gbtn blue small" data-send="github"><span>GitHub</span></button>
+          </div>
+          <p class="rp-msg" id="rp-msg" role="status"></p>
+        </div>
+      </div>
+    </div>
+
     <div class="overlay" id="popup-debug" hidden>
       <div class="popup small dbg" role="dialog" aria-modal="true" aria-labelledby="dbg-title">
         <div class="ribbon"><h2 id="dbg-title">Debug</h2></div>
@@ -678,6 +715,7 @@
             <button data-action="dbg" data-cmd="perf">Performance overlay</button>
             <button data-action="dbg" data-cmd="perf_bench">Benchmark: autoplay 10 min</button>
             <button data-action="dbg" data-cmd="perf_stress">Stress: +300 bugs</button>
+            <button data-action="dbg" data-cmd="report">Report a bug (F8)</button>
           </div>
           <h4>Danger</h4>
           <div class="dbg-grid">
@@ -692,6 +730,7 @@
 
   <script src="js/vendor/pixi.min.js"></script>
   <script src="js/perf.js"></script>
+  <script src="js/report.js"></script>
   <script src="js/native.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/pixi-render.js"></script>

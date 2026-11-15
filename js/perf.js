@@ -254,6 +254,16 @@ window.PSPerf = (function () {
   }
 
   return {
+    // numbers for a bug report: live FPS if the overlay is measuring, plus renderer, scene, memory and the last benchmark
+    snapshot() {
+      const a = recent(), st = window.PSRender && PSRender.stats ? PSRender.stats() : {}, heap = heapMB();
+      return {
+        fps: rafOn && a.length ? Math.round(1000 / avg(a)) : 'not measured (overlay off)',
+        renderer: st.renderer, resolution: st.resolution, sceneObjects: st.objects, domNodes: document.getElementsByTagName('*').length,
+        heapMB: heap === null ? null : r1(heap),
+        lastBenchmark: lastReport ? `${lastReport.fps.avg} fps avg, ${lastReport.fps.low1} 1% low, ${lastReport.hitches} hitches (${lastReport.date})` : null,
+      };
+    },
     show, toggle, sample, run, stop, setStress, copyReport,
     setInfo(fn) { infoFn = fn; },
     setBench(fn) { benchFn = fn; }, // what the overlay's Bench button starts (the game's autoplay benchmark)

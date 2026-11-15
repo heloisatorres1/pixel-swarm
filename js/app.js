@@ -80,7 +80,8 @@
   const DEBUG = true;
   // Fill these in when the pages exist (e.g. 'https://yoursite.com/privacy').
   // While empty, the buttons show a "coming soon" message.
-  const LINKS = { privacy: '', terms: '', feedback: '' };
+  const LINKS = { privacy: '', terms: '' };
+  const ISSUES_URL = 'https://github.com/heloisatorres1/pixel-swarm/issues/new'; // the report tool's "GitHub" button
 
   // ---- SAVING ----
   // The save is written to two slots (main + backup) so a broken write never loses progress; the phone app also
@@ -222,6 +223,7 @@
     lastFocus = document.activeElement;
     el.hidden = false;
     openPopupEl = el;
+    PSReport.crumb('popup', 'opened ' + id.replace('popup-', '') + ' pop-up');
     const closeBtn = el.querySelector('[data-close]');
     if (closeBtn) closeBtn.focus();
   }
@@ -258,7 +260,7 @@
   }
   function openLink(key) {
     if (LINKS[key]) window.open(LINKS[key], '_blank', 'noopener');
-    else toast({ privacy: 'Privacy Policy', terms: 'Terms of Service', feedback: 'Feedback' }[key] + ' — coming soon');
+    else toast({ privacy: 'Privacy Policy', terms: 'Terms of Service' }[key] + ' — coming soon');
   }
   function copyText(text, message = 'Copied!') {
     const done = () => toast(message);
@@ -280,6 +282,7 @@
     document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === 'screen-' + name));
     document.querySelectorAll('#bottom-nav .nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
     currentScreen = name;
+    PSReport.crumb('screen', 'went to the ' + name + ' screen');
     PSAudio.music(name === 'game' ? 'game' : 'menu');
     $('app').classList.toggle('no-nav', name === 'game' || name === 'events');
     $('app').classList.toggle('no-ads', !!state.noAds);
@@ -1515,6 +1518,8 @@
     game = buildLevel(theme, diff, index, opts.puzzles);
     game.event = !!opts.event;
     game.key = `${game.event ? 'event' : theme}-${diff}-${index}`;
+    game.startedAt = performance.now();
+    PSReport.crumb('level', `started level ${game.key} (${D.PICTURES[game.picId] ? D.PICTURES[game.picId].name : game.picId}${opts.puzzles ? ', test puzzles: ' + opts.puzzles.join(' ') : ''})`);
     if (!opts.puzzles) state.attempts[game.key] = (state.attempts[game.key] || 0) + 1; // (test levels don't count)
     showScreen('game');
     renderAdBanner();
@@ -2066,6 +2071,7 @@
   }
   function endLevel(win) {
     game.over = true;
+    PSReport.crumb('level', win ? 'won the level' : 'lost the level (out of slots)');
     fx(win ? 'win' : 'lose');
     if (win) { $('g-board').parentElement.classList.add('flash'); setTimeout(() => { $('g-board').parentElement.classList.remove('flash'); showWin(3 - Math.min(2, game.extras)); }, 600); }
     else openPopup('popup-fail');
@@ -2555,6 +2561,7 @@
   }
   const DEBUG_CMDS = {
     perf: () => toast(PSPerf.toggle() ? 'Performance overlay ON' : 'Performance overlay OFF'),
+    report: () => openReport(),
     perf_bench: () => perfAutoplay(600),
     perf_stress: () => { PSPerf.show(true); toast(PSPerf.setStress(300) ? '+300 bugs on screen' : 'Stress test needs WebGL'); },
     win: () => { if (!inGame()) return; clearBees(); game.bees = []; game.over = true; showWin(3); },
@@ -2612,12 +2619,13 @@
   function runCheat(cmd) {
     closePopup(true);
     DEBUG_CMDS[cmd]();
-    if (!cmd.startsWith('p_') && !cmd.startsWith('perf') && !['win', 'lose', 'solve', 'speed', 'reset'].includes(cmd)) refreshAfterCheat();
+    if (!cmd.startsWith('p_') && !cmd.startsWith('perf') && !['win', 'lose', 'solve', 'speed', 'reset', 'report'].includes(cmd)) refreshAfterCheat();
   }
 
   // ---------- Click handling ----------
   const ACTIONS = {
     debug: () => openPopup('popup-debug'),
+    report: () => openReport(),
     dbg: (el) => runCheat(el.dataset.cmd),
     'tap-block': (el) => tapBlock(Number(el.dataset.col), Number(el.dataset.i || 0)),
     'slot-info': (el) => slotInfo(Number(el.dataset.slot)),
@@ -2651,6 +2659,44 @@
     // performance debug: #perf shows the overlay; #perfbench plays a Hard level with the bot for 10 s and measures it,
     // #perfstress does the same with 1000 extra bugs (report in document.body.dataset.perf)
     perf: () => PSPerf.show(true),
+    // dev: index.html#reporttest plays a few moves, opens the report tool and checks what a report contains
+    // (screenshot with the gameplay layer, game state, steps from the recent actions, captured errors, the
+    // downloadable file and the Markdown text); results in <body data-reporttest>
+    reporttest: async () => {
+      const res = {}, wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const check = (name, ok, info) => { res[name] = ok ? 'ok' : 'FAIL' + (info ? ': ' + info : ''); };
+      state.tutorialSeen = true; state.seen = allSeen();
+      startGame(state.selected.theme, 'easy', 0);
+      await wait(400);
+      document.querySelector('#g-queue [data-action="tap-block"]').click();
+      await wait(300);
+      console.error('reporttest: sample error');
+      openPopup('popup-settings');
+      document.querySelector('#popup-settings [data-action="report"]').click();
+      for (let i = 0; i < 40 && $('popup-report').hidden; i++) await wait(250);
+      check('opens from Settings', !$('popup-report').hidden);
+      check('screenshot', PSReport.hasShot);
+      // the screenshot must contain the gameplay layer: the board area may not be one flat color
+      const c = $('rp-shot'), b = $('g-board').getBoundingClientRect(), a = $('app').getBoundingClientRect(), k = c.width / a.width;
+      const px = c.getContext('2d').getImageData((b.left - a.left + b.width * 0.2) * k, (b.top - a.top + b.height * 0.2) * k, b.width * 0.6 * k, 4).data;
+      const colors = new Set(); for (let i = 0; i < px.length; i += 16) colors.add(px[i] + ',' + px[i + 1] + ',' + px[i + 2]);
+      check('screenshot shows the board', colors.size > 3, colors.size + ' colors');
+      check('steps pre-filled', /started level/.test($('rp-steps').value) && /tapped the/.test($('rp-steps').value), $('rp-steps').value);
+      $('rp-title').value = 'Test report'; $('rp-what').value = 'Something odd';
+      const r = PSReport.build();
+      check('game state', r.game.screen === 'game' && /-easy-0$/.test(r.game.level) && typeof r.game.pixelsLeft === 'number', JSON.stringify(r.game));
+      check('errors captured', r.recentErrors.some((e) => /sample error/.test(e.msg)));
+      check('save code', /^PSW1-/.test(r.save || ''));
+      check('severity in QA terms', ['Blocker', 'Major', 'Minor', 'Trivial'].includes(r.severity));
+      const html = PSReport.htmlFile(r, c.toDataURL('image/png'));
+      const json = JSON.parse(new DOMParser().parseFromString(html, 'text/html').getElementById('report-data').textContent);
+      check('download file', json.id === r.id && html.includes('<img src="data:image/png'));
+      check('markdown', PSReport.markdown(r).includes('### Steps to reproduce'));
+      // a title is required before sending
+      $('rp-title').value = ''; document.querySelector('#popup-report [data-send="download"]').click();
+      check('title required', /title/i.test($('rp-msg').textContent));
+      document.body.dataset.reporttest = JSON.stringify(res);
+    },
     perfbench: () => perfAutoplay(600),
     perfstress: () => perfAutoplay(600, 1000),
     win: () => { ACTIONS.game(); showWin(); },
@@ -2968,9 +3014,43 @@
     if (el.dataset.link) return openLink(el.dataset.link);
     const action = el.dataset.action;
     if (el.disabled) return;
+    PSReport.crumb('tap', describeTap(el, action));
     if (ACTIONS[action]) return ACTIONS[action](el);
     toast(`${SCREEN_NAMES[action] || action} — coming soon`);
   });
+
+  // how a tap reads in a report's "recent actions" / steps to reproduce
+  function describeTap(el, action) {
+    if (action === 'tap-block') {
+      const b = game && game.cols[+el.dataset.col] && game.cols[+el.dataset.col][+(el.dataset.i || 0)];
+      return `tapped the ${b ? (b.kind || COLOR_NAMES[b.color] || b.color || '') : ''} block in line ${+el.dataset.col + 1}`.replace('the  block', 'the block');
+    }
+    if (action === 'dbg') return 'debug: ' + el.dataset.cmd;
+    const label = (el.getAttribute('aria-label') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    return `tapped "${label || action}"${label && label.toLowerCase() !== action ? ` (${action})` : ''}`;
+  }
+
+  // ---------- Report a problem (js/report.js) ----------
+  // what the game attaches to a report: where the player is and the state of the level
+  function reportContext() {
+    const c = { screen: currentScreen, popup: openPopupEl ? openPopupEl.id : '', playerLevel: state.playerLevel,
+      levelsWon: state.stats.levels, coins: state.coins, gems: state.gems, creature: state.creature,
+      speedOwned: state.maxSpeed, noAds: state.noAds, settings: Object.entries(state.settings).map(([k, v]) => `${k} ${v ? 'on' : 'off'}`).join(', ') };
+    if (game && currentScreen === 'game') {
+      Object.assign(c, {
+        level: game.key, picture: D.PICTURES[game.picId] ? D.PICTURES[game.picId].name : game.picId, levelSeconds: Math.round((performance.now() - (game.startedAt || performance.now())) / 1000),
+        pixelsLeft: game.remaining, slots: game.slots.map((b) => (b ? `${COLOR_NAMES[b.color] || b.color}×${b.amount}` : 'empty')).join(', '),
+        frontBlocks: game.cols.map((col) => (col[0] ? col[0].kind || COLOR_NAMES[col[0].color] || col[0].color : '-')).join(', '),
+        bugsFlying: game.bees.length, speed: game.speed + 'x', puzzles: [...(game.puzzles || [])].join(' ') || 'none',
+        extraSlots: game.extras, over: game.over,
+      });
+    }
+    return c;
+  }
+  function openReport(opts) {
+    closePopup(true); // the screenshot shows the game, not the menu the report was opened from
+    setTimeout(() => PSReport.open(opts), 60);
+  }
 
   // ---------- Ambient bee swarm ----------
   function spawnSwarm(count) {
@@ -3094,6 +3174,10 @@
   PSPerf.setInfo(() => ({ screen: currentScreen, level: currentScreen === 'game' && game ? game.key : '',
     bugs: game && currentScreen === 'game' ? game.bees.length : 0, menuBugs: bees.length }));
   PSPerf.setBench(() => perfAutoplay(600));
+  PSReport.init({ openPopup, toast, copyText, share: PSNative.share, context: reportContext, saveCode,
+    platform: () => (PSNative.native ? 'Android app' : 'web'), version: APP_VERSION, build: DEBUG ? 'debug' : 'release', issuesUrl: ISSUES_URL });
+  // testers on a computer: F8 opens the report tool anywhere
+  document.addEventListener('keydown', (e) => { if (e.key === 'F8' && !e.repeat) { e.preventDefault(); openReport(); } });
   if (DEBUG && PSPerf.wasOn) PSPerf.show(true);
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     spawnSwarm(6);
