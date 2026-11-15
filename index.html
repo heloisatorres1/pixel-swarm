@@ -653,6 +653,12 @@
         <div class="ribbon"><h2 id="dbg-title">Debug</h2></div>
         <button class="close-btn" data-close aria-label="Close">X</button>
         <div class="popup-body">
+          <div class="dbg-tabs" role="tablist">
+            <button type="button" role="tab" id="dbg-tab-tools" data-dtab="tools" aria-selected="true" aria-controls="dbg-pane-tools">Tools</button>
+            <button type="button" role="tab" id="dbg-tab-logs" data-dtab="logs" aria-selected="false" aria-controls="dbg-pane-logs">Logs <b id="dbg-tab-count" hidden></b></button>
+          </div>
+          <!-- Tools tab: cheats, pop-ups, puzzles, performance -->
+          <div class="dbg-pane" id="dbg-pane-tools" role="tabpanel" aria-labelledby="dbg-tab-tools">
           <h4>Level (while playing)</h4>
           <div class="dbg-grid">
             <button data-action="dbg" data-cmd="win">Win level</button>
@@ -720,6 +726,19 @@
           <h4>Danger</h4>
           <div class="dbg-grid">
             <button class="red" data-action="dbg" data-cmd="reset">Reset ALL data</button>
+          </div>
+          </div>
+          <!-- Logs tab (js/report.js): errors, warnings, info and player actions; kept across reloads -->
+          <div class="dbg-pane" id="dbg-pane-logs" role="tabpanel" aria-labelledby="dbg-tab-logs" hidden>
+            <div class="rp-chips" id="lg-filters"></div>
+            <p class="lg-summary" id="lg-summary"></p>
+            <ul class="lg-list" id="lg-list"></ul>
+            <div class="rp-send">
+              <button type="button" class="gbtn blue small" data-log="copy"><span>Copy</span></button>
+              <button type="button" class="gbtn green small" data-log="share"><span>Share</span></button>
+              <button type="button" class="gbtn blue small" data-log="download"><span>Download</span></button>
+              <button type="button" class="gbtn red small" data-log="clear"><span>Clear</span></button>
+            </div>
           </div>
         </div>
       </div>

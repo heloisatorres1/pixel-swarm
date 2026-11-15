@@ -26,6 +26,7 @@ For Pixel Swarm I wrote the game design document, directed the art and owned the
 - **Reliable saving:** two save slots (a broken write never loses progress), saving when the game goes to the background, durable app storage on Android, and a **save code** to back up progress or move it to another device.
 - **Sharing:** finished pictures become a share card (picture + link) for the phone's share sheet.
 - **In-game report tool** (Settings › Report, or F8): type, how bad it is (mapped to Blocker / Major / Minor / Trivial), title, what happened, what was expected and **steps to reproduce pre-filled from the player's last actions**. It attaches a **screenshot** of the moment (the reporter can draw on it), the game state (level, slots, pixels left…), build and device, performance numbers, recent errors and, optionally, a save code to load the exact progress. No personal data. Reports go out through the share sheet, a self-contained **HTML file** (with the raw JSON inside), Markdown for a tracker, or a pre-filled GitHub issue.
+- **Logs tab** in the debug menu: every error (uncaught exceptions with file and line, rejected promises, console errors), warning, info line and player action, with filters and a red error count on the DBG button. The last 300 lines are kept across reloads, so a crash's log can still be read after restarting; copy, share or download it as text.
 - **Reminders (Android):** daily reward, "your bugs miss you" and event-ending notifications, with permission asked after the first win, not at launch.
 
 ## Quality & testing

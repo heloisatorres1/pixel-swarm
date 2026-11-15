@@ -1324,3 +1324,29 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .rp-send .gbtn.small { width: 100%; }
 .rp-send .gbtn.small span { font-size: 18px; }
 .rp-msg { min-height: 18px; margin: 8px 0 0; text-align: center; font: 600 13px "Fredoka"; color: #2f6b12; }
+
+/* ---------- Debug pop-up tabs + Logs tab ---------- */
+.dbg-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 8px; border-radius: 14px; background: #f1dcb8; }
+.dbg-tabs button { position: relative; padding: 7px 0; border: 0; border-radius: 10px; background: transparent; color: #7a4317; font: 400 17px "Lilita One"; }
+.dbg-tabs button[aria-selected="true"] { background: #fff; color: #4d2a0e; box-shadow: 0 2px 0 #d9a868; }
+.dbg-tabs b { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: #e0453a; color: #fff; font: 700 11px/18px "Fredoka"; }
+.dbg-pane[hidden] { display: none; }
+.rp-chip b { margin-left: 3px; font-weight: 700; opacity: .75; }
+.lg-summary { margin: 8px 0 6px; font: 500 12px "Fredoka"; color: #7a5a3a; }
+.lg-list { list-style: none; margin: 0; padding: 4px; height: min(46vh, 380px); overflow-y: auto; border-radius: 12px; background: #1e2028;
+  font: 11px/1.4 ui-monospace, Consolas, monospace; color: #d8dce6; }
+.lg-list li { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; padding: 4px 6px; border-bottom: 1px solid #2c303b; word-break: break-word; }
+.lg-list li.prev { opacity: .55; }
+.lg-list .lg-t { color: #8a90a0; }
+.lg-list .lg-lv { min-width: 44px; text-transform: uppercase; font-weight: 700; }
+.lg-list .lg-m i { color: #9aa3b5; font-style: normal; }
+.lg-error .lg-lv { color: #ff6b6b; } .lg-error .lg-m { color: #ffc2c2; }
+.lg-warn .lg-lv { color: #ffd166; }
+.lg-info .lg-lv { color: #7ec8ff; }
+.lg-action .lg-lv { color: #7ee08a; }
+.lg-list .lg-empty { display: block; text-align: center; color: #8a90a0; padding: 20px; }
+.gbtn.red { background: linear-gradient(#ff8a7a, #e0453a 55%, #b8261d); }
+.gbtn.red span { -webkit-text-stroke: 5px #6e1410; }
+/* DBG button: count of errors this session */
+#dbg-btn[data-errors]::after { content: attr(data-errors); position: absolute; top: -6px; right: -8px; min-width: 18px; height: 18px; padding: 0 4px;
+  box-sizing: border-box; border-radius: 9px; background: #e0453a; border: 2px solid #fff; color: #fff; font: 700 10px/14px "Fredoka"; text-align: center; }

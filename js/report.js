@@ -9,32 +9,55 @@
    (readable anywhere, with the data embedded as JSON), copied as Markdown or opened as a GitHub issue. */
 window.PSReport = (function () {
   'use strict';
-  const MAX_CRUMBS = 40, MAX_ERRORS = 20;
+  const MAX_CRUMBS = 40, MAX_ERRORS = 20, MAX_LOG = 300, LOG_KEY = 'pixelswarm.log';
   const crumbs = [], errors = [];
   const t0 = Date.now();
   let cfg = null, shot = null, shotCanvas = null, ink = null, current = null, h2cLoading = null;
 
-  // ---------- recent actions ("breadcrumbs") and errors, kept from the start ----------
+  // ---------- the log: errors, warnings, info and player actions ----------
+  // Kept in local storage (the last 300 lines), so after a crash or reload the previous session's log is still there.
   const stamp = () => { const s = Math.round((Date.now() - t0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  let log = [], saveTimer = 0, logListener = null;
+  try { log = (JSON.parse(localStorage.getItem(LOG_KEY)) || []).map((l) => ({ ...l, prev: true })); } catch (e) { log = []; }
+  function addLog(level, msg, kind) {
+    const text = String(msg).slice(0, 600), last = log[log.length - 1];
+    if (last && !last.prev && last.level === level && last.msg === text) last.n = (last.n || 1) + 1; // repeated line: "×5"
+    else log.push({ time: new Date().toISOString(), at: stamp(), level, kind: kind || level, msg: text });
+    if (log.length > MAX_LOG) log.splice(0, log.length - MAX_LOG);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveLog, level === 'error' ? 0 : 1000); // errors are saved at once (the page may be about to die)
+    if (logListener) logListener();
+  }
+  function saveLog() { try { localStorage.setItem(LOG_KEY, JSON.stringify(log.map(({ prev, ...l }) => l))); } catch (e) { /* ignore */ } }
+  window.addEventListener('pagehide', saveLog);
   function crumb(kind, text) {
+    addLog('action', text, kind);
     const last = crumbs[crumbs.length - 1];
     if (last && last.kind === kind && last.text === text) { last.n = (last.n || 1) + 1; return; } // "tap block ×5"
     crumbs.push({ at: stamp(), kind, text });
     if (crumbs.length > MAX_CRUMBS) crumbs.shift();
   }
-  function logError(kind, msg) {
+  function logError(kind, msg, level = 'error') {
+    addLog(level, msg, kind);
     errors.push({ at: stamp(), kind, msg: String(msg).slice(0, 400) });
     if (errors.length > MAX_ERRORS) errors.shift();
   }
-  window.addEventListener('error', (e) => logError('error', `${e.message}${e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno})` : ''}`));
-  window.addEventListener('unhandledrejection', (e) => logError('promise', e.reason && e.reason.message ? e.reason.message : e.reason));
-  ['error', 'warn'].forEach((k) => {
+  const str = (a) => (a instanceof Error ? `${a.message}${a.stack ? ' | ' + a.stack.split('\n').slice(1, 3).map((s) => s.trim()).join(' | ') : ''}`
+    : typeof a === 'object' ? (() => { try { return JSON.stringify(a); } catch (e) { return String(a); } })() : String(a));
+  window.addEventListener('error', (e) => logError('error', `${e.message}${e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno}:${e.colno})` : ''}`));
+  window.addEventListener('unhandledrejection', (e) => logError('promise', e.reason ? str(e.reason) : 'rejected promise'));
+  // console output goes to the log too (errors and warnings also to the report's "recent errors")
+  [['error', 'error'], ['warn', 'warn'], ['info', 'info'], ['log', 'info']].forEach(([k, level]) => {
     const orig = console[k];
     console[k] = function (...args) {
-      try { logError('console.' + k, args.map((a) => (a instanceof Error ? a.message : typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')); } catch (e) { /* ignore */ }
+      try {
+        const text = args.map(str).join(' ');
+        if (level === 'info') addLog('info', text, 'console.' + k); else logError('console.' + k, text, level);
+      } catch (e) { /* ignore */ }
       return orig.apply(console, args);
     };
   });
+  addLog('info', `session start · ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, '')}`, 'session');
 
   // ---------- screenshot ----------
   function loadH2C() {
@@ -274,10 +297,76 @@ ${r.save ? sec('Save code', '<p class="meta">Paste in Settings › Restore to lo
     c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
   }
 
+  // ---------- log viewer (Debug pop-up › Logs tab) ----------
+  const clockTime = (iso) => new Date(iso).toLocaleTimeString('en-GB'); // local time, 24h
+  const LOG_FILTERS = [['all', 'All'], ['error', 'Errors'], ['warn', 'Warnings'], ['info', 'Info'], ['action', 'Actions']];
+  let logFilter = 'all';
+  const shown = () => log.filter((l) => logFilter === 'all' || l.level === logFilter);
+  const logLine = (l) => `${clockTime(l.time)} [${l.level.toUpperCase()}]${l.kind !== l.level ? ` ${l.kind}:` : ''} ${l.msg}${l.n ? ` (×${l.n})` : ''}${l.prev ? '  (previous session)' : ''}`;
+  const counts = () => { const c = { error: 0, warn: 0 }; log.forEach((l) => { if (!l.prev && c[l.level] !== undefined) c[l.level] += l.n || 1; }); return c; };
+  function logText() {
+    const lines = shown().map(logLine);
+    return [`Pixel Swarm log · v${cfg.version} (${cfg.build}, ${cfg.platform()}) · ${new Date().toISOString()} · filter: ${logFilter} · ${lines.length} lines`, ...lines].join('\n');
+  }
+  function renderLogs() {
+    const box = $('lg-list');
+    if (!box || $('popup-debug').hidden || $('dbg-pane-logs').hidden) return;
+    const c = counts();
+    $('lg-filters').innerHTML = LOG_FILTERS.map(([id, label]) => {
+      const n = id === 'all' ? log.length : log.filter((l) => l.level === id).length;
+      return `<button type="button" class="rp-chip${id === logFilter ? ' on' : ''}" data-f="${id}">${label} <b>${n}</b></button>`;
+    }).join('');
+    $('lg-summary').textContent = `This session: ${c.error} errors, ${c.warn} warnings · kept: last ${MAX_LOG} lines`;
+    const rows = shown();
+    box.innerHTML = rows.length ? rows.slice().reverse().map((l) => `<li class="lg-${l.level}${l.prev ? ' prev' : ''}"><span class="lg-t">${clockTime(l.time)}</span>
+      <span class="lg-lv">${l.level}</span><span class="lg-m">${l.kind !== l.level ? `<i>${esc(l.kind)}</i> ` : ''}${esc(l.msg)}${l.n ? ` <b>×${l.n}</b>` : ''}</span></li>`).join('')
+      : '<li class="lg-empty">Nothing here</li>';
+  }
+  function showTab(tab) {
+    ['tools', 'logs'].forEach((t) => {
+      $('dbg-pane-' + t).hidden = t !== tab;
+      $('dbg-tab-' + t).setAttribute('aria-selected', String(t === tab));
+    });
+    renderLogs();
+  }
+  function openLogs() { cfg.openPopup('popup-debug'); showTab('logs'); }
+  const LOG_SEND = {
+    copy() { cfg.copyText(logText(), 'Log copied'); },
+    async share() {
+      const res = await cfg.share({ title: 'Pixel Swarm log', text: logText() });
+      if (res === 'unsupported') LOG_SEND.download();
+    },
+    download() {
+      const d = new Date(), pad = (n) => String(n).padStart(2, '0');
+      download(`pixel-swarm-log-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.txt`, new Blob([logText()], { type: 'text/plain' }));
+      cfg.toast('Log saved');
+    },
+    clear() { log = []; saveLog(); errors.length = 0; renderLogs(); if (logListener) logListener(); cfg.toast('Log cleared'); },
+  };
+  function bindLogs() {
+    $('popup-debug').addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-dtab]');
+      if (tab) { showTab(tab.dataset.dtab); return; }
+      const f = e.target.closest('[data-f]');
+      if (f) { logFilter = f.dataset.f; renderLogs(); return; }
+      const s = e.target.closest('[data-log]');
+      if (s) LOG_SEND[s.dataset.log]();
+    });
+  }
+
   return {
     // config: { openPopup, toast, copyText, share, context(), saveCode(), platform(), version, build, issuesUrl }
-    init(config) { cfg = config; bind(); },
-    open, crumb, logError, build, markdown, htmlFile,
+    init(config) { cfg = config; bind(); bindLogs(); },
+    open, crumb, logError, build, markdown, htmlFile, openLogs, logText,
+    info: (msg) => addLog('info', msg, 'game'),
+    onLog(fn) {
+      logListener = () => {
+        const c = counts(); fn(c); renderLogs();
+        const t = $('dbg-tab-count'); if (t) { t.hidden = !c.error; t.textContent = c.error > 99 ? '99+' : c.error; }
+      };
+      logListener();
+    },
+    get log() { return log.slice(); },
     get crumbs() { return crumbs.slice(); }, get errors() { return errors.slice(); }, get hasShot() { return !!shotCanvas; },
   };
 })();

@@ -2626,6 +2626,7 @@
   const ACTIONS = {
     debug: () => openPopup('popup-debug'),
     report: () => openReport(),
+    logs: () => PSReport.openLogs(),
     dbg: (el) => runCheat(el.dataset.cmd),
     'tap-block': (el) => tapBlock(Number(el.dataset.col), Number(el.dataset.i || 0)),
     'slot-info': (el) => slotInfo(Number(el.dataset.slot)),
@@ -3176,6 +3177,13 @@
   PSPerf.setBench(() => perfAutoplay(600));
   PSReport.init({ openPopup, toast, copyText, share: PSNative.share, context: reportContext, saveCode,
     platform: () => (PSNative.native ? 'Android app' : 'web'), version: APP_VERSION, build: DEBUG ? 'debug' : 'release', issuesUrl: ISSUES_URL });
+  // DBG button shows how many errors happened this session (DBG › Logs tab to read them)
+  PSReport.onLog((c) => {
+    const b = $('dbg-btn'); if (!b) return;
+    if (c.error) b.dataset.errors = c.error > 99 ? '99+' : c.error; else delete b.dataset.errors;
+  });
+  PSReport.info(`game ready · v${APP_VERSION} (${DEBUG ? 'debug' : 'release'}, ${PSNative.native ? 'Android app' : 'web'})`);
+  // dev: index.html#logs opens the Debug pop-up on the Logs tab
   // testers on a computer: F8 opens the report tool anywhere
   document.addEventListener('keydown', (e) => { if (e.key === 'F8' && !e.repeat) { e.preventDefault(); openReport(); } });
   if (DEBUG && PSPerf.wasOn) PSPerf.show(true);
