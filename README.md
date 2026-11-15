@@ -8,9 +8,11 @@ A cute casual puzzle game for mobile and web. Tiny bugs live inside the magical 
 
 ## About this project
 
-Portfolio project by **[@heloisatorres1](https://github.com/heloisatorres1)**, **Senior QA / Test Lead**.
+A portfolio project by **Heloisa Oller Torres**, QA Test Lead / Senior QA for games and software · [LinkedIn](https://www.linkedin.com/in/heloisa-torres-94250814a) · [GitHub](https://github.com/heloisatorres1)
 
-I wrote the game design document, directed the art and owned the product end to end, the way a small studio team would: from concept and level design to release on the web and a native Android build. Development was AI-assisted under my direction; quality was built in from the start, with automated checks for every system (see [Quality & testing](#quality--testing)).
+I've worked in game QA for 6+ years on live-service and in-development titles (PC, mobile, web). Most recently I was Test Lead at Fortis Games, leading internal and external QA teams across Unity, Godot and web games. I'm ISTQB CTFL certified.
+
+For Pixel Swarm I wrote the game design document, directed the art and owned the product end to end, from concept and level design to release on the web and a native Android build. Development was AI-assisted under my direction. Quality was built in from the start, the same way I work as a Test Lead: a test strategy for every system, automated checks that prove the game works, and clear evidence of what they caught (see [Quality & testing](#quality--testing)).
 
 ## Features
 
