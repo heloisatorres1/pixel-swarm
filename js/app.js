@@ -396,17 +396,42 @@
     if (currentScreen === 'menu') renderMenu();
   }
 
-  // ---------- Fake video ad (shows "AD placeholder", then gives the reward) ----------
+  // ---------- Ads (simulated) ----------
+  // Ads are "house ads": short promos for the game's own features. The flow around them is real (rewarded slots,
+  // free coins, x2 rewards, ads between levels, No Ads hiding them). To use a real ad network, replace the body of
+  // showAd (rewarded video: call onReward only when the network reports a completed view) and renderAdBanner.
+  const HOUSE_ADS = [
+    { art: 'assets/sprites/pumpkin.png', title: 'Halloween Event', text: '12 spooky pictures and a pumpkin reward track' },
+    { art: 'assets/skins/bee-astronaut.png', title: 'New Skins', text: 'Dress your swarm: 6 bugs, 7 looks each' },
+    { art: 'assets/sprites/chest.png', title: 'Daily Rewards', text: 'Come back 7 days in a row for the big chest' },
+    { art: 'assets/sprites/key.png', title: 'Hard Mode', text: 'Detailed 18×18 scenes with keys, ice and pipes' },
+    { art: 'assets/sprites/trophy.png', title: 'Gallery', text: 'Collect all 102 pictures and share them' },
+  ];
+  let houseAdIndex = Math.floor(Math.random() * HOUSE_ADS.length);
+  const nextHouseAd = () => HOUSE_ADS[houseAdIndex++ % HOUSE_ADS.length];
+  const AD_SECONDS = 3;
+
   function showAd(onReward) {
-    const el = $('ad-overlay');
-    let n = 3;
+    const el = $('ad-overlay'), ad = nextHouseAd();
+    $('ad-card').innerHTML = `<img src="${ad.art}" alt=""><h3>${ad.title}</h3><p>${ad.text}</p>`;
+    let n = AD_SECONDS;
     $('ad-count').textContent = n;
+    const bar = $('ad-bar');
+    bar.style.transition = 'none'; bar.style.width = '0%';
     el.hidden = false;
+    void bar.offsetWidth; // restart the progress bar
+    bar.style.transition = `width ${AD_SECONDS}s linear`; bar.style.width = '100%';
     const timer = setInterval(() => {
       n -= 1;
       $('ad-count').textContent = n;
       if (n <= 0) { clearInterval(timer); el.hidden = true; onReward(); }
     }, 1000);
+  }
+
+  // banner under the board: a different promo each level (hidden with No Ads)
+  function renderAdBanner() {
+    const ad = nextHouseAd();
+    $('g-ad').innerHTML = `<img src="${ad.art}" alt=""><span><b>${ad.title}</b>${ad.text}</span><i>Demo ad</i>`;
   }
 
   function watchFreeCoins() {
@@ -1490,6 +1515,7 @@
     game.key = `${game.event ? 'event' : theme}-${diff}-${index}`;
     if (!opts.puzzles) state.attempts[game.key] = (state.attempts[game.key] || 0) + 1; // (test levels don't count)
     showScreen('game');
+    renderAdBanner();
     renderGame();
     if (!loopOn) { loopOn = true; nextTick(); }
     // first level ever: tutorial. New puzzle types: "New Feature!" pop-up the first time they appear.
