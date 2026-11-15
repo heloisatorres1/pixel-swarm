@@ -107,7 +107,9 @@
     return id;
   }
   const SAVE_VERSION = 2;
+  let saveFrozen = false; // the autoplay benchmark plays real levels without touching the player's save
   function saveState() {
+    if (saveFrozen) return;
     try {
       const json = JSON.stringify({ v: SAVE_VERSION, savedAt: Date.now(), data: state });
       const prev = localStorage.getItem(SAVE_KEY);
@@ -2476,6 +2478,69 @@
     }, 250);
   }
 
+  // ---------- Performance benchmark: the game plays itself ----------
+  // Plays level after level (every theme and difficulty, in rotation) with the solving bot at 8x (the fastest speed
+  // a player can unlock, so many levels fit in one run) while PSPerf records every frame. The player's save is frozen
+  // during the run and restored at the end.
+  const AUTOPLAY_SPEED = 8, LEVEL_TIMEOUT = 240000;
+  function perfAutoplay(seconds = 600, extraBugs = 0) {
+    if (PSPerf.running) return toast('A benchmark is already running');
+    const snapshot = JSON.stringify(state);
+    saveState(); saveFrozen = true;
+    state.tutorialSeen = true; state.seen = allSeen(); // no tutorial or "New Feature" pop-ups
+    // Easy, Medium, Hard, Easy… (next theme each round): every minute gets a similar mix, so a growing memory
+    // trend means a leak, not just bigger pictures later in the run
+    const order = [], nT = D.THEMES.length;
+    for (let i = 0; i < nT * 3 * D.LEVELS_PER_DIFFICULTY; i++) {
+      order.push({ diff: D.DIFFICULTIES[i % 3], theme: D.THEMES[Math.floor(i / 3) % nT].id,
+        index: Math.floor(i / (3 * nT)) % D.LEVELS_PER_DIFFICULTY });
+    }
+    const run = { levels: 0, wins: 0, losses: 0, timeouts: 0, ended: 0, popupAt: 0, startedAt: 0 };
+    const next = () => {
+      clearInterval(window.__bot); closePopup(true); $('ad-overlay').hidden = true;
+      const L = order[run.levels % order.length];
+      run.levels += 1; run.ended = 0; run.popupAt = 0; run.startedAt = performance.now();
+      startGame(L.theme, L.diff, L.index);
+      game.speed = AUTOPLAY_SPEED; game.forceSpeed = true; renderSpeed();
+      startBot(true);
+    };
+    const drive = setInterval(() => {
+      const now = performance.now();
+      if (currentScreen !== 'game' || !game) return next();
+      if (game.over) {
+        if (!run.ended) { run.ended = now; if (game.remaining === 0) run.wins += 1; else run.losses += 1; }
+        else if (now - run.ended > 1800) next(); // let the win pop-up show for a moment, like a player would see it
+        return;
+      }
+      // a pop-up during play (e.g. a booster unlock): close it like a player would
+      if (openPopupEl) { if (!run.popupAt) run.popupAt = now; else if (now - run.popupAt > 1200) { closePopup(true); run.popupAt = 0; } }
+      if (now - run.startedAt > LEVEL_TIMEOUT) { run.timeouts += 1; next(); }
+    }, 250);
+    PSPerf.show(true);
+    PSPerf.setStress(extraBugs);
+    next();
+    toast(`Benchmark: the game plays itself for ${Math.round(seconds / 60)} min (Stop in the overlay)`);
+    PSPerf.run(seconds, {
+      label: extraBugs ? `Autoplay + ${extraBugs} bugs` : 'Autoplay',
+      status: () => `level ${run.levels} · won ${run.wins}${run.losses ? ' · lost ' + run.losses : ''}`,
+      row: () => ({ levels: run.levels, level: game ? game.key : '' }),
+      info: () => ({ mode: 'autoplay', speed: AUTOPLAY_SPEED, extraBugs, levelsStarted: run.levels, wins: run.wins,
+        losses: run.losses, timeouts: run.timeouts }),
+    }).then(() => {
+      clearInterval(drive); clearInterval(window.__bot);
+      PSPerf.setStress(0);
+      if (game) game.over = true;
+      closePopup(true); $('ad-overlay').hidden = true;
+      // put the player's save back exactly as it was
+      const saved = JSON.parse(snapshot);
+      Object.keys(state).forEach((k) => { if (!(k in saved)) delete state[k]; });
+      Object.assign(state, saved);
+      saveFrozen = false; saveState();
+      showScreen('menu'); renderHud();
+      toast('Benchmark finished: tap Copy in the overlay for the report');
+    });
+  }
+
   // =====================================================================
   //  DEBUG CHEATS (DBG button). Set DEBUG = false before publishing the game.
   // =====================================================================
@@ -2490,7 +2555,7 @@
   }
   const DEBUG_CMDS = {
     perf: () => toast(PSPerf.toggle() ? 'Performance overlay ON' : 'Performance overlay OFF'),
-    perf_bench: () => { PSPerf.show(true); PSPerf.run(10); toast('10 s benchmark: keep playing normally'); },
+    perf_bench: () => perfAutoplay(600),
     perf_stress: () => { PSPerf.show(true); toast(PSPerf.setStress(300) ? '+300 bugs on screen' : 'Stress test needs WebGL'); },
     win: () => { if (!inGame()) return; clearBees(); game.bees = []; game.over = true; showWin(3); },
     lose: () => { if (!inGame()) return; game.over = true; openPopup('popup-fail'); },
@@ -2586,13 +2651,8 @@
     // performance debug: #perf shows the overlay; #perfbench plays a Hard level with the bot for 10 s and measures it,
     // #perfstress does the same with 1000 extra bugs (report in document.body.dataset.perf)
     perf: () => PSPerf.show(true),
-    perfbench: () => ACTIONS.perfrun(0),
-    perfstress: () => ACTIONS.perfrun(1000),
-    perfrun: (extra) => {
-      state.tutorialSeen = true;
-      startGame(state.selected.theme, 'hard', 0);
-      setTimeout(() => { if (openPopupEl) closePopup(true); startBot(false); PSPerf.show(true); PSPerf.setStress(extra); PSPerf.run(10); }, 600);
-    },
+    perfbench: () => perfAutoplay(600),
+    perfstress: () => perfAutoplay(600, 1000),
     win: () => { ACTIONS.game(); showWin(); },
     fail: () => { ACTIONS.game(); openPopup('popup-fail'); },
     booster_popup: () => { ACTIONS.game(); showUnlock('booster', BOOSTERS[1]); },
@@ -3025,10 +3085,15 @@
   let startAction = location.hash.slice(1);
   // dev: add "-still" (e.g. #story_last-still) to freeze animations for screenshots
   if (startAction.endsWith('-still')) { startAction = startAction.slice(0, -6); document.body.classList.add('dev-still'); }
-  pixiReady.then(() => { if (ACTIONS[startAction]) ACTIONS[startAction](); });
+  const perfHash = startAction.match(/^perf(bench|stress)_(\d+)$/); // e.g. #perfbench_60 = a 60-second run
+  pixiReady.then(() => {
+    if (ACTIONS[startAction]) ACTIONS[startAction]();
+    else if (perfHash) perfAutoplay(+perfHash[2], perfHash[1] === 'stress' ? 1000 : 0);
+  });
   // performance debug: what the overlay shows about the game, and keep it open across reloads (debug builds)
   PSPerf.setInfo(() => ({ screen: currentScreen, level: currentScreen === 'game' && game ? game.key : '',
     bugs: game && currentScreen === 'game' ? game.bees.length : 0, menuBugs: bees.length }));
+  PSPerf.setBench(() => perfAutoplay(600));
   if (DEBUG && PSPerf.wasOn) PSPerf.show(true);
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     spawnSwarm(6);

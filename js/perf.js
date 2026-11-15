@@ -1,8 +1,9 @@
 /* ===================== Pixel Swarm — performance debug =====================
    A live overlay (FPS, frame times, game-loop and render cost, memory, renderer and scene counts), a stress test
-   (hundreds of extra flying bugs) and a benchmark that produces a report to copy into a bug ticket.
-   Open it from the Debug menu, or with index.html#perf (overlay) / #perfbench / #perfstress (automatic benchmark,
-   result in document.body.dataset.perf for headless runs). */
+   (hundreds of extra flying bugs) and a long benchmark (the game plays itself for 10 minutes) whose report has a
+   per-minute timeline and a memory-leak check, ready to copy into a bug ticket.
+   Open it from the Debug menu, or with index.html#perf (overlay) / #perfbench / #perfstress (benchmark; add _<seconds>,
+   e.g. #perfbench_60, for a shorter run). The report is also written to document.body.dataset.perf for headless runs. */
 window.PSPerf = (function () {
   'use strict';
   const RING = 240;                        // frames kept for the graph and the live numbers
@@ -15,7 +16,7 @@ window.PSPerf = (function () {
   let head = 0, count = 0, last = 0, rafOn = false, longFrames = 0, longTasks = 0;
   const samples = { tick: [], render: [] }; // recent costs (ms)
   let el = null, graph = null, text = null, collapsed = false, corner = +(store.get('pixelswarm.perf.corner') || 0);
-  let stressIndex = 0, bench = null, lastReport = null, infoFn = () => ({}), uiTimer = 0;
+  let stressIndex = 0, bench = null, lastReport = null, infoFn = () => ({}), uiTimer = 0, benchFn = null;
 
   // ---------- measuring ----------
   function loop(t) {
@@ -23,7 +24,13 @@ window.PSPerf = (function () {
       const dt = t - last;
       frames[head] = dt; head = (head + 1) % RING; count = Math.min(RING, count + 1);
       if (dt > LONG_FRAME) longFrames++;
-      if (bench) bench.frames.push(dt);
+      if (bench) {
+        bench.frames.push(dt);
+        if (dt > LONG_FRAME) {
+          const i = infoFn() || {};
+          bench.hitchLog.push({ at: clock(Math.max(0, t - bench.t0) / 1000), ms: r1(dt), screen: i.screen || '', level: i.level || '' });
+        }
+      }
     }
     last = t;
     const r = window.PSRender && PSRender.stats ? PSRender.stats().renderMs : undefined;
@@ -65,6 +72,7 @@ window.PSPerf = (function () {
   .perf-hud button { padding: 4px 0; border: 0; border-radius: 5px; background: #2f3542; color: #e8ecf2; font: 600 10px ui-monospace, Consolas, monospace; cursor: pointer; }
   .perf-hud button:active { background: #4b5366; } .perf-hud button.on { background: #b5651d; }
   .perf-hud .pmsg { margin-top: 4px; color: #ffd166; white-space: pre-wrap; }
+  .perf-hud { max-height: calc(100dvh - 8px); overflow: hidden; }
   .perf-hud.min pre, .perf-hud.min canvas, .perf-hud.min .pb, .perf-hud.min .pmsg { display: none; }`;
 
   function build() {
@@ -82,7 +90,7 @@ window.PSPerf = (function () {
     el.querySelector('.pb').addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       e.stopPropagation();
-      ({ stress: cycleStress, bench: () => run(10), copy: copyReport, move })[b.dataset.p]();
+      ({ stress: cycleStress, bench: () => (bench ? stop() : benchFn ? benchFn() : run(10)), copy: copyReport, move })[b.dataset.p]();
     });
     document.body.appendChild(el);
     updateButtons();
@@ -93,7 +101,8 @@ window.PSPerf = (function () {
     if (!el) return;
     const s = el.querySelector('[data-p=stress]'), n = STRESS_STEPS[stressIndex];
     s.textContent = n ? `${n} bugs` : 'Stress'; s.classList.toggle('on', !!n);
-    el.querySelector('[data-p=bench]').classList.toggle('on', !!bench);
+    const bb = el.querySelector('[data-p=bench]');
+    bb.classList.toggle('on', !!bench); bb.textContent = bench ? 'Stop' : 'Bench';
   }
 
   const grade = (fps) => (fps >= 55 ? 'good' : fps >= 40 ? 'warn' : 'bad');
@@ -148,34 +157,84 @@ window.PSPerf = (function () {
   }
 
   // ---------- benchmark ----------
-  function run(seconds = 10) {
+  // run(seconds, { label, status(), info(), row() }): records every frame; the report has totals, a timeline (one row
+  // per minute, or per sixth of a short run), the worst hitches with where they happened and a memory check.
+  // Each row's heapMB is the lowest reading of that row: what stays after garbage collection, so its trend shows leaks.
+  // status() is shown live, info() and row() go in the report.
+  const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+  function run(seconds = 10, opts = {}) {
     if (bench) return bench.promise;
     let done;
-    bench = { frames: [], samples: {}, longTasks: 0, heap0: heapMB(), t0: performance.now(), promise: new Promise((r) => { done = r; }) };
+    const step = seconds >= 300 ? 60 : Math.max(5, Math.round(seconds / 6));
+    const promise = new Promise((r) => { done = r; });
+    const b = bench = { frames: [], samples: {}, longTasks: 0, heap0: heapMB(), t0: performance.now(), seconds, step, opts,
+      timeline: [], cut: 0, hitchLog: [], rowHeap: null, promise, done };
     ensureLoop(); updateButtons();
-    let left = seconds; msg(`Benchmark… ${left} s`);
-    const timer = setInterval(() => { left -= 1; if (left > 0) msg(`Benchmark… ${left} s`); }, 1000);
-    setTimeout(() => {
-      clearInterval(timer);
-      const b = bench; bench = null; updateButtons();
-      lastReport = makeReport(b, seconds);
-      document.body.dataset.perf = JSON.stringify(lastReport);
-      const f = lastReport.fps;
-      msg(`${f.avg} fps avg, ${f.low1} 1% low, ${lastReport.frameMs.p95} ms p95, ${lastReport.hitches} hitches → Copy`);
-      done(lastReport);
-    }, seconds * 1000);
-    return bench.promise;
+    b.timer = setInterval(() => {
+      const t = (performance.now() - b.t0) / 1000, h = heapMB();
+      if (h !== null) b.rowHeap = b.rowHeap === null ? h : Math.min(b.rowHeap, h);
+      if (t >= (b.timeline.length + 1) * step - 0.05) addRow(b);
+      msg(`${opts.label || 'Benchmark'} ${clock(t)} / ${clock(seconds)}${opts.status ? '\n' + opts.status() : ''}`);
+      if (t >= seconds) stop();
+    }, 250);
+    return promise;
   }
-  function makeReport(b, seconds) {
+  // one timeline row: the frames since the previous row
+  function addRow(b) {
+    const a = b.frames.slice(b.cut), st = window.PSRender && PSRender.stats ? PSRender.stats() : {};
+    const heap = b.rowHeap !== null ? b.rowHeap : heapMB(); b.rowHeap = null;
+    const from = b.timeline.length * b.step, t = (performance.now() - b.t0) / 1000;
+    b.timeline.push({ t: `${clock(from)}-${clock(t)}`, fps: r1(a.length / Math.max(0.001, t - from)), low1: r1(low1(a)),
+      p95Ms: r1(pct(a, 0.95)), hitches: a.filter((v) => v > LONG_FRAME).length, heapMB: heap === null ? null : r1(heap),
+      objects: st.objects === undefined ? null : st.objects, dom: document.getElementsByTagName('*').length,
+      ...(b.opts.row ? b.opts.row() : {}) });
+    b.cut = b.frames.length;
+  }
+  function stop() {
+    const b = bench; if (!b) return;
+    clearInterval(b.timer);
+    if (b.frames.length > b.cut + 10) addRow(b); // the last (partial) row
+    bench = null; updateButtons();
+    lastReport = makeReport(b);
+    document.body.dataset.perf = JSON.stringify(lastReport);
+    const f = lastReport.fps;
+    msg(`Done: ${f.avg} fps avg, ${f.low1} 1% low\n${lastReport.verdict.join('\n')}\nCopy = full report`);
+    b.done(lastReport);
+  }
+  // slope of a straight line through the timeline values (per row)
+  function slope(rows, key) {
+    const p = rows.map((r, i) => [i, r[key]]).filter(([, v]) => typeof v === 'number');
+    if (p.length < 3) return null;
+    const mx = avg(p.map((q) => q[0])), my = avg(p.map((q) => q[1]));
+    return p.reduce((s, [x, y]) => s + (x - mx) * (y - my), 0) / p.reduce((s, [x]) => s + (x - mx) ** 2, 0);
+  }
+  function makeReport(b) {
     const a = b.frames, st = window.PSRender && PSRender.stats ? PSRender.stats() : {}, info = infoFn() || {}, heap = heapMB();
     const cost = (k) => { const s = b.samples[k] || []; return { avg: r2(avg(s)), p95: r2(pct(s, 0.95)), max: r2(s.length ? Math.max(...s) : 0) }; };
+    const secs = (performance.now() - b.t0) / 1000, perMin = 60 / b.step;
+    // memory trend: skip the first row (warm-up: the first levels load their art)
+    // trends need several levels of each difficulty: only judged on runs of 3+ minutes
+    const rows = secs >= 180 ? b.timeline.slice(1) : [], hs = slope(rows, 'heapMB'), ds = slope(rows, 'dom'), os = slope(rows, 'objects');
+    const memory = { heapStartMB: b.heap0 === null ? null : r1(b.heap0), heapEndMB: heap === null ? null : r1(heap),
+      heapGrowthMBPerMin: hs === null ? null : r2(hs * perMin), domGrowthPerMin: ds === null ? null : r1(ds * perMin),
+      objectsGrowthPerMin: os === null ? null : r1(os * perMin) };
+    const fps = { avg: r1(a.length / secs), low1: r1(low1(a)) }, hitches = a.filter((v) => v > LONG_FRAME).length;
+    const verdict = [
+      fps.low1 >= 50 ? 'Smooth (1% low >= 50 fps)' : fps.low1 >= 30 ? 'Some stutter (1% low 30-50 fps)' : 'Stutters (1% low < 30 fps)',
+      `${hitches} hitches (${r2(hitches / Math.max(1 / 60, secs / 60))}/min)`,
+      memory.heapGrowthMBPerMin === null ? (secs < 180 ? 'Memory trend: needs a run of 3+ minutes' : 'Memory trend: n/a (heap is only readable in Chromium)')
+        : memory.heapGrowthMBPerMin > 1 ? `Possible leak: heap +${memory.heapGrowthMBPerMin} MB/min` : `Memory stable (${memory.heapGrowthMBPerMin} MB/min)`,
+    ];
+    if (memory.domGrowthPerMin !== null && memory.domGrowthPerMin > 20) verdict.push(`DOM keeps growing: +${memory.domGrowthPerMin} nodes/min`);
+    if (memory.objectsGrowthPerMin !== null && memory.objectsGrowthPerMin > 50) verdict.push(`Scene keeps growing: +${memory.objectsGrowthPerMin} objects/min`);
     return {
-      date: new Date().toISOString(), seconds, frames: a.length,
-      fps: { avg: r1(a.length / ((performance.now() - b.t0) / 1000)), low1: r1(low1(a)) },
+      date: new Date().toISOString(), label: b.opts.label || 'Benchmark', seconds: r1(secs), plannedSeconds: b.seconds, frames: a.length,
+      verdict, fps,
       frameMs: { avg: r1(avg(a)), p50: r1(pct(a, 0.5)), p95: r1(pct(a, 0.95)), p99: r1(pct(a, 0.99)), max: r1(a.length ? Math.max(...a) : 0) },
-      hitches: a.filter((v) => v > LONG_FRAME).length, longTasks: b.longTasks,
-      gameTickMs: cost('tick'), renderMs: cost('render'),
-      heapMB: b.heap0 === null ? null : { start: r1(b.heap0), end: r1(heap) },
+      hitches, worstHitches: [...b.hitchLog].sort((x, y) => y.ms - x.ms).slice(0, 10),
+      longTasks: b.longTasks, gameTickMs: cost('tick'), renderMs: cost('render'), memory,
+      ...(b.opts.info ? { run: b.opts.info() } : {}),
+      timeline: b.timeline,
       scene: { renderer: st.renderer, size: st.size, resolution: st.resolution, objects: st.objects, stressBugs: st.stress || 0,
         domNodes: document.getElementsByTagName('*').length, ...info },
       device: { userAgent: navigator.userAgent, pixelRatio: window.devicePixelRatio, cores: navigator.hardwareConcurrency || null,
@@ -195,9 +254,10 @@ window.PSPerf = (function () {
   }
 
   return {
-    show, toggle, sample, run, setStress, copyReport,
+    show, toggle, sample, run, stop, setStress, copyReport,
     setInfo(fn) { infoFn = fn; },
-    get on() { return !!el; }, get report() { return lastReport; },
+    setBench(fn) { benchFn = fn; }, // what the overlay's Bench button starts (the game's autoplay benchmark)
+    get on() { return !!el; }, get running() { return !!bench; }, get report() { return lastReport; },
     get wasOn() { return store.get('pixelswarm.perf') === '1'; },
   };
 })();
