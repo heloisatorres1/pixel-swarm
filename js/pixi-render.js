@@ -8,6 +8,7 @@ window.PSRender = (function () {
   let app = null, host = null, boardC, overC, beeLayer, fxLayer, pixelTex = null, sprites = [];
   let pal = {}, cellPx = 1, gapPx = 0, cols = 1, lastItems = '';
   const fx = []; // running effects: { sprite, t, dur, delay, update(p) }
+  let renderStart = 0, lastRenderMs = 0, stressLayer = null;
 
   // a white square with a bright top band; tinted per color it gives the glossy "pixel" look
   function makePixelTexture() {
@@ -34,6 +35,9 @@ window.PSRender = (function () {
     pixelTex = makePixelTexture();
     await Promise.race([PIXI.Assets.load(textureUrls).then(() => { lastItems = ''; }), new Promise((ok) => setTimeout(ok, 8000))]);
     app.ticker.add((tk) => stepFx(tk.deltaMS));
+    // performance debug: CPU time of each PixiJS render (the render itself runs at LOW priority, between these two)
+    app.ticker.add(() => { renderStart = performance.now(); }, null, PIXI.UPDATE_PRIORITY.LOW + 1);
+    app.ticker.add(() => { lastRenderMs = performance.now() - renderStart; }, null, PIXI.UPDATE_PRIORITY.UTILITY);
     document.body.classList.add('pixi-on'); // CSS hides the HTML fallback board
   }
   const NO_BEE = { set() {}, carry() {}, destroy() {} };
@@ -215,5 +219,45 @@ window.PSRender = (function () {
     });
   }
 
-  return { init, preload, frame, resize, setBoard, syncBoard, spawnBee, clearBees, wind, get ready() { return !!app; } };
+  // ---------- performance debug ----------
+  function countObjects(o) { let n = 1; for (const c of o.children) n += countObjects(c); return n; }
+  function stats() {
+    if (!app) return { renderer: '2D canvas (fallback)' };
+    const r = app.renderer;
+    return {
+      renderer: r.name === 'webgpu' ? 'WebGPU' : 'WebGL' + (r.context && r.context.webGLVersion ? ' ' + r.context.webGLVersion : ''),
+      resolution: r.resolution, size: `${r.width}×${r.height}`,
+      objects: countObjects(app.stage), bees: beeLayer.children.length,
+      effects: fx.length, stress: stressLayer ? stressLayer.children.length : 0, renderMs: lastRenderMs,
+    };
+  }
+  // stress test: n extra flying bugs drawn over the game (0 removes them)
+  function stress(n) {
+    if (!app) return 0;
+    if (stressLayer) { app.ticker.remove(stressLayer.__step); stressLayer.destroy({ children: true }); stressLayer = null; }
+    if (!n) return 0;
+    const tex = PIXI.Assets.get('assets/sprites/bee_fly.png') || pixelTex;
+    stressLayer = new PIXI.Container();
+    app.stage.addChild(stressLayer);
+    const W = app.renderer.width / app.renderer.resolution, H = app.renderer.height / app.renderer.resolution;
+    for (let i = 0; i < n; i++) {
+      const s = new PIXI.Sprite(tex);
+      s.anchor.set(0.5); s.scale.set(28 / Math.max(tex.width, tex.height));
+      s.position.set(Math.random() * W, Math.random() * H);
+      s.__v = [(Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3];
+      stressLayer.addChild(s);
+    }
+    stressLayer.__step = (tk) => {
+      for (const s of stressLayer.children) {
+        s.x += s.__v[0] * tk.deltaMS; s.y += s.__v[1] * tk.deltaMS;
+        if (s.x < 0 || s.x > W) s.__v[0] *= -1;
+        if (s.y < 0 || s.y > H) s.__v[1] *= -1;
+        s.rotation = Math.sin((s.x + s.y) / 40) * 0.3;
+      }
+    };
+    app.ticker.add(stressLayer.__step);
+    return n;
+  }
+
+  return { init, preload, frame, resize, setBoard, syncBoard, spawnBee, clearBees, wind, stats, stress, get ready() { return !!app; } };
 })();

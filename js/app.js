@@ -1941,7 +1941,11 @@
     if (!game || currentScreen !== 'game') { loopOn = false; return; }
     const dt = Math.min(50, now - (game.last || now));
     game.last = now;
-    if (!openPopupEl && !game.over && !document.hidden && !tutorialPausesGame()) step(dt);
+    if (!openPopupEl && !game.over && !document.hidden && !tutorialPausesGame()) {
+      const t0 = performance.now();
+      step(dt);
+      PSPerf.sample('tick', performance.now() - t0); // performance debug: cost of one game-loop step
+    }
     nextTick();
   }
   function step(dt) {
@@ -2485,6 +2489,9 @@
     toast('Start a level first'); return false;
   }
   const DEBUG_CMDS = {
+    perf: () => toast(PSPerf.toggle() ? 'Performance overlay ON' : 'Performance overlay OFF'),
+    perf_bench: () => { PSPerf.show(true); PSPerf.run(10); toast('10 s benchmark: keep playing normally'); },
+    perf_stress: () => { PSPerf.show(true); toast(PSPerf.setStress(300) ? '+300 bugs on screen' : 'Stress test needs WebGL'); },
     win: () => { if (!inGame()) return; clearBees(); game.bees = []; game.over = true; showWin(3); },
     lose: () => { if (!inGame()) return; game.over = true; openPopup('popup-fail'); },
     solve: () => { if (!inGame()) return; startBot(true); toast('Auto-solving…'); },
@@ -2540,7 +2547,7 @@
   function runCheat(cmd) {
     closePopup(true);
     DEBUG_CMDS[cmd]();
-    if (!cmd.startsWith('p_') && !['win', 'lose', 'solve', 'speed', 'reset'].includes(cmd)) refreshAfterCheat();
+    if (!cmd.startsWith('p_') && !cmd.startsWith('perf') && !['win', 'lose', 'solve', 'speed', 'reset'].includes(cmd)) refreshAfterCheat();
   }
 
   // ---------- Click handling ----------
@@ -2576,6 +2583,16 @@
     'fail-addslot': () => showAd(() => { closePopup(true); game.slots.push(null); game.slotPlace.push('main'); game.extras += 1; game.over = false; renderSlots(); toast('+1 slot'); }),
     // dev shortcuts to preview the gameplay pop-ups: index.html#win, #fail, #booster, #feature, #tutorial
     game: () => startLevel(state.selected.theme, 'easy', 0),
+    // performance debug: #perf shows the overlay; #perfbench plays a Hard level with the bot for 10 s and measures it,
+    // #perfstress does the same with 1000 extra bugs (report in document.body.dataset.perf)
+    perf: () => PSPerf.show(true),
+    perfbench: () => ACTIONS.perfrun(0),
+    perfstress: () => ACTIONS.perfrun(1000),
+    perfrun: (extra) => {
+      state.tutorialSeen = true;
+      startGame(state.selected.theme, 'hard', 0);
+      setTimeout(() => { if (openPopupEl) closePopup(true); startBot(false); PSPerf.show(true); PSPerf.setStress(extra); PSPerf.run(10); }, 600);
+    },
     win: () => { ACTIONS.game(); showWin(); },
     fail: () => { ACTIONS.game(); openPopup('popup-fail'); },
     booster_popup: () => { ACTIONS.game(); showUnlock('booster', BOOSTERS[1]); },
@@ -3009,6 +3026,10 @@
   // dev: add "-still" (e.g. #story_last-still) to freeze animations for screenshots
   if (startAction.endsWith('-still')) { startAction = startAction.slice(0, -6); document.body.classList.add('dev-still'); }
   pixiReady.then(() => { if (ACTIONS[startAction]) ACTIONS[startAction](); });
+  // performance debug: what the overlay shows about the game, and keep it open across reloads (debug builds)
+  PSPerf.setInfo(() => ({ screen: currentScreen, level: currentScreen === 'game' && game ? game.key : '',
+    bugs: game && currentScreen === 'game' ? game.bees.length : 0, menuBugs: bees.length }));
+  if (DEBUG && PSPerf.wasOn) PSPerf.show(true);
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     spawnSwarm(6);
     requestAnimationFrame(tick);

@@ -39,6 +39,7 @@ The levels are generated procedurally, so "it looks fine" isn't enough: every le
 | `#clicktest` (real taps) | Taps puzzle tiles and the skins purchase flow **through the page, like a finger**. It caught a tap-handling clash that the bots (which call game functions directly) could not see. |
 | `tools/check-pictures.mjs` | Every level picture: right size, allowed colors, color count per difficulty, no two colors that look alike (CIELAB ΔE < 25) or close to the board, no repeats, no name clashes. Renders a preview sheet of all 102 pictures. |
 | Layout probes and screenshots | Layout and "fits without scrolling" checks at several phone sizes; headless screenshots to compare screens against the design references. |
+| Performance debug (`#perf`, `#perfbench`, `#perfstress`) | A live overlay (FPS, 1% low, frame-time graph, game-loop and render cost, memory, long tasks, scene and DOM counts), a **stress test** (300 or 1000 extra bugs) and a 10-second **benchmark** whose JSON report (frame-time percentiles, hitches, device info) can be copied into a bug ticket. `#perfbench` plays a Hard level with a bot and records the report for headless runs; with 1000 extra bugs it still holds the display refresh rate with no hitches on a desktop. |
 | `PSAudio.measure()` | Renders the music and effects offline and measures their loudness, to balance the mix without relying on speakers. |
 
 Release builds turn the debug menu off; the shortcuts above are kept so the game can be tested anywhere.

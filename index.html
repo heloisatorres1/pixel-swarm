@@ -673,6 +673,12 @@
             <button data-action="dbg" data-cmd="pz_cookie">Cookie blocker</button>
             <button data-action="dbg" data-cmd="pz_mlinked">Mystery links</button>
           </div>
+          <h4>Performance</h4>
+          <div class="dbg-grid">
+            <button data-action="dbg" data-cmd="perf">Performance overlay</button>
+            <button data-action="dbg" data-cmd="perf_bench">Benchmark (10 s)</button>
+            <button data-action="dbg" data-cmd="perf_stress">Stress: +300 bugs</button>
+          </div>
           <h4>Danger</h4>
           <div class="dbg-grid">
             <button class="red" data-action="dbg" data-cmd="reset">Reset ALL data</button>
@@ -685,6 +691,7 @@
   </div>
 
   <script src="js/vendor/pixi.min.js"></script>
+  <script src="js/perf.js"></script>
   <script src="js/native.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/pixi-render.js"></script>
