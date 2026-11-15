@@ -11,7 +11,8 @@
     "preview": "node scripts/dev-server.mjs dist",
     "package:itch": "node scripts/build.mjs && node scripts/package-itch.mjs",
     "android:sync": "node scripts/build.mjs && npx cap sync android",
-    "android:open": "npx cap open android"
+    "android:open": "npx cap open android",
+    "android:sync:debug": "node scripts/build.mjs --debug && npx cap sync android"
   },
   "keywords": [
     "html5",

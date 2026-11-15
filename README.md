@@ -17,7 +17,7 @@ For Pixel Swarm I wrote the game design document, directed the art and owned the
 ## Features
 
 - **Core loop:** tap colored blocks into a few slots; bugs fly out of the tree, eat the matching pixels and carry them home. Fill every slot with colors that can't be reached and you're out of slots.
-- **87 levels:** 5 themes × 15 levels (Easy → Medium → Hard) plus a 12-level **Halloween event** with a pumpkin reward track.
+- **102 levels, each with its own pixel-art picture:** 5 themes × 18 levels (6 Easy, 6 Medium, 6 Hard) plus a 12-level **Halloween event** with a pumpkin reward track. Easy pictures are simple 12×12 subjects, Hard ones are detailed 18×18 scenes ([all pictures](docs/screenshots/levels-overview.png)).
 - **10 puzzle mechanics**, introduced one by one with a "New Feature" card: mystery blocks, frozen blocks (ice counter), linked blocks, mystery links, pipes, keys & locks, wood blocks + hammers, cookie blockers, big pixels and hidden pixels.
 - **Boosters:** Add Slot, Shuffle (never leaves you stuck), Wind, Free Pick; rewarded AD slots.
 - **Meta systems:** store and speed store, daily rewards and tasks, stat-based achievements, a gallery of every level, a skins wardrobe (6 bugs × 7 looks), profile, story cutscene, guided first level, age gate and special offers.
@@ -32,10 +32,11 @@ The levels are generated procedurally, so "it looks fine" isn't enough: every le
 
 | Check | What it proves |
 |---|---|
-| `#verify_all` (level checker) | All **87 levels are solvable**: each one is played instantly in solution order with the real rules. Also reports a **careless-player win rate** per difficulty against design targets, whether each puzzle type can be placed in every level, and visual rules (e.g. never two hidden "?" blocks in one column). |
+| `#verify_all` (level checker) | All **102 levels are solvable**: each one is played instantly in solution order with the real rules. Also reports a **careless-player win rate** per difficulty against design targets, whether each puzzle type can be placed in every level, and visual rules (e.g. never two hidden "?" blocks in one column). |
 | `#pzsolve_<puzzle>` (playthroughs) | A bot plays a level with each puzzle **through the real animated game loop** until it wins. This caught a desync between the instant checker and the animated game that only showed up with the cookie blocker. |
 | `#featuretest` (simulated phone) | Checks saving (backup slot, recovery from a corrupted save, save codes), sharing (share sheet and fallback), vibration patterns and the notification schedule against **fake phone plugins** that record every call, so phone features are tested without a phone. |
 | `#clicktest` (real taps) | Taps puzzle tiles and the skins purchase flow **through the page, like a finger**. It caught a tap-handling clash that the bots (which call game functions directly) could not see. |
+| `tools/check-pictures.mjs` | Every level picture: right size, allowed colors, color count per difficulty, no two colors that look alike (CIELAB ΔE < 25) or close to the board, no repeats, no name clashes. Renders a preview sheet of all 102 pictures. |
 | Layout probes and screenshots | Layout and "fits without scrolling" checks at several phone sizes; headless screenshots to compare screens against the design references. |
 | `PSAudio.measure()` | Renders the music and effects offline and measures their loudness, to balance the mix without relying on speakers. |
 

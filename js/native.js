@@ -76,6 +76,26 @@ window.PSNative = (function () {
     } catch (e) { return 'error'; }
   }
 
+  // TEST: a notification in `seconds` (debug menu). Phone app: a real scheduled notification (close or
+  // background the app to see it). Browser: a web notification while the page is open.
+  async function testNotification(seconds = 10) {
+    const N = plugin('LocalNotifications');
+    if (N) {
+      if (!(await requestNotifications())) return 'no-permission';
+      try {
+        await N.schedule({ notifications: [{ id: 1099, title: 'Test notification 🐝', body: 'Notifications work! Tap to open Pixel Swarm.',
+          schedule: { at: new Date(Date.now() + seconds * 1000), allowWhileIdle: true }, channelId: CHANNEL, extra: { kind: 'daily' },
+          smallIcon: 'ic_stat_bee', iconColor: '#F5A623' }] });
+        return 'scheduled';
+      } catch (e) { return 'error'; }
+    }
+    if (!('Notification' in window)) return 'unsupported';
+    const p = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+    if (p !== 'granted') return 'no-permission';
+    setTimeout(() => { try { new Notification('Test notification 🐝', { body: 'Notifications work!', icon: 'assets/sprites/bee.png' }); } catch (e) { /* ignore */ } }, seconds * 1000);
+    return 'web';
+  }
+
   // ---------- SHARE ----------
   // { title, text, url, image (a canvas), fileName } -> 'shared' | 'cancelled' | 'unsupported'
   async function share({ title, text, url, image, fileName = 'pixel-swarm.png' }) {
@@ -102,5 +122,5 @@ window.PSNative = (function () {
   async function storeGet(key) { const P = plugin('Preferences'); if (!P) return null; try { return (await P.get({ key })).value; } catch (e) { return null; } }
   async function storeSet(key, value) { const P = plugin('Preferences'); if (!P) return; try { await P.set({ key, value }); } catch (e) { /* ignore */ } }
 
-  return { get native() { return isNative(); }, haptic, vibrate: haptic, setupNotifications, requestNotifications, scheduleReminders, share, storeGet, storeSet };
+  return { get native() { return isNative(); }, haptic, vibrate: haptic, setupNotifications, requestNotifications, scheduleReminders, testNotification, share, storeGet, storeSet };
 })();

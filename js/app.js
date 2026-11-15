@@ -2499,6 +2499,12 @@
     p_tutorial: () => { if (inGame()) startTutorial(); },
     p_story: () => startStory(() => {}),
     p_ad: () => showAd(() => toast('Ad finished')),
+    // notification test: arrives in 10 s (phone: close or background the app; browser: keep the page open)
+    notif_test: async () => {
+      const r = await PSNative.testNotification(10);
+      toast({ scheduled: 'Test notification in 10 s: close or background the app', web: 'Test notification in 10 s (keep this page open)',
+        'no-permission': 'Notifications are not allowed: enable them in the phone/browser settings', unsupported: 'This browser has no notifications', error: 'Could not schedule the test' }[r] || r);
+    },
     reset: () => {
       if (!window.confirm('Delete ALL saved data (currencies, progress, skins, settings)?')) return;
       try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
@@ -2764,6 +2770,8 @@
     },
     // dev: index.html#sharecard puts a share card image into <body data-card> (to review the artwork)
     sharecard: () => { document.body.dataset.card = shareCard(GALLERY.find((g) => g.theme === 'animals' && g.diff === 'medium')).toDataURL('image/png'); },
+    // dev: index.html#levels_demo — every level of a theme won (to see all the level pictures on the Levels screen)
+    levels_demo: () => { D.DIFFICULTIES.forEach((d) => { state.progress['flowers-' + d] = Array(D.LEVELS_PER_DIFFICULTY).fill(3); }); openTheme('flowers'); },
     // dev: index.html#layout_probe writes the game screen's layout boxes into <body data-rects> (for layout checks)
     layout_probe: () => { state.tutorialSeen = true; state.seen = allSeen(); startGame(state.selected.theme, 'medium', 0);
       setTimeout(() => { const r = (id) => { const b = $(id).getBoundingClientRect(); return [Math.round(b.top), Math.round(b.bottom)]; };

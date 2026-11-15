@@ -1,7 +1,8 @@
 /* ===================== Pixel Swarm — game data =====================
    Pixel-art pictures, themes and levels. Edit freely:
    - each picture is a grid of characters; every character is a color from PALETTE ('.' = empty)
-   - each theme lists its pictures; levels cycle through them
+   - every level has its own picture: js/pictures.js lists them per theme and difficulty (PS_LEVELS)
+     Easy / Medium pictures are 12x12, Hard pictures 18x18 (more detail); they are enlarged to the board size
 */
 window.PS_DATA = (function () {
   'use strict';
@@ -121,19 +122,22 @@ window.PS_DATA = (function () {
       'ooOkoOOokOoo', 'ooOoOOOOoOoo', 'oookkkkkkooo', '.ooOkokokOo.', '..oooooooo..', '............'] },
   };
 
+  Object.assign(PICTURES, window.PS_PICTURES || {}); // the level pictures from js/pictures.js
+  const LEVEL_PICS = window.PS_LEVELS || {};
+  // levels: the picture of every level per difficulty (from js/pictures.js); pictures: thumbnails for the menus
   const THEMES = [
     { id: 'flowers', name: 'Flowers', pictures: ['flower', 'tulip'] },
     { id: 'fruits',  name: 'Fruits',  pictures: ['cherry', 'apple'] },
     { id: 'animals', name: 'Animals', pictures: ['cat', 'chick'] },
     { id: 'sweets',  name: 'Sweets',  pictures: ['cupcake', 'donut'] },
     { id: 'ocean',   name: 'Ocean',   pictures: ['fish', 'star'] },
-  ];
+  ].map((t) => (LEVEL_PICS[t.id] ? Object.assign(t, { levels: LEVEL_PICS[t.id], pictures: [LEVEL_PICS[t.id].easy[0], LEVEL_PICS[t.id].hard[0]] }) : t));
   // Event: 12 special levels on a path. Levels 1–4 Easy, 5–8 Medium, 9–12 Hard. Each first win = pumpkins.
   const EVENT = { id: 'halloween', name: 'Halloween', title: 'Halloween Hunt', levels: 12,
-    pictures: ['pumpkin', 'ghost', 'bat', 'candy', 'hat'] };
+    pictures: LEVEL_PICS.halloween || ['pumpkin', 'ghost', 'bat', 'candy', 'hat'] };
   const eventDiff = (i) => (i < 4 ? 'easy' : i < 8 ? 'medium' : 'hard');
   const DIFFICULTIES = ['easy', 'medium', 'hard'];
-  const LEVELS_PER_DIFFICULTY = 5;
+  const LEVELS_PER_DIFFICULTY = 6;
 
   // Draws a picture to a canvas and returns a data URL (cached). Gaps between pixels give the mosaic look.
   const cache = {};
@@ -159,10 +163,11 @@ window.PS_DATA = (function () {
     return (cache[key] = c.toDataURL());
   }
 
-  // level picture for a theme / difficulty / index (levels cycle through the theme's pictures)
+  // the picture of a level (each level has its own; themes without a list yet cycle their two pictures)
   function levelPicture(themeId, diff, index) {
     if (themeId === EVENT.id) return EVENT.pictures[index % EVENT.pictures.length];
     const t = THEMES.find((x) => x.id === themeId);
+    if (t.levels) { const list = t.levels[diff]; return list[index % list.length]; }
     return t.pictures[(DIFFICULTIES.indexOf(diff) + index) % t.pictures.length];
   }
 
@@ -263,14 +268,16 @@ window.PS_DATA = (function () {
       return sky;
     }).join(''));
   }
-  const themeOfPicture = (picId) => (EVENT.pictures.includes(picId) ? EVENT.id
-    : (THEMES.find((t) => t.pictures.includes(picId)) || THEMES[0]).id);
+  const inTheme = (t, picId) => t.pictures.includes(picId) || (t.levels && DIFFICULTIES.some((d) => t.levels[d].includes(picId)));
+  const themeOfPicture = (picId) => (EVENT.pictures.includes(picId) ? EVENT.id : (THEMES.find((t) => inTheme(t, picId)) || THEMES[0]).id);
   const gridCache = {};
   function levelGrid(picId, diff) {
     const key = picId + '|' + diff;
     if (gridCache[key]) return gridCache[key];
     const src = PICTURES[picId].grid, d = DIFFICULTY[diff];
-    const big = d.scale === 3 ? scale3x(src) : d.scale === 2 ? scale2x(src) : src;
+    // every difficulty has a board size (12 x scale); 12x12 pictures are enlarged 1/2/3x, 18x18 Hard pictures 2x
+    const k = Math.max(1, Math.round((12 * d.scale) / src.length));
+    const big = k === 3 ? scale3x(src) : k === 2 ? scale2x(src) : src;
     // picture colors get (maxColors - background colors); then the background is added
     const picture = tidyColors(shade(big, d.shade), src, d.maxColors - (d.bgBands >= 3 ? 3 : 2));
     return (gridCache[key] = addBackground(picture, themeOfPicture(picId), d.bgBands));
