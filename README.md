@@ -12,7 +12,7 @@ A portfolio project by **Heloisa Oller Torres**, QA Test Lead / Senior QA for ga
 
 I've worked in game QA for 6+ years on live-service and in-development titles (PC, mobile, web). Most recently I was Test Lead at Fortis Games, leading internal and external QA teams across Unity, Godot and web games. I'm ISTQB CTFL certified.
 
-For Pixel Swarm I wrote the game design document, directed the art and owned the product end to end, from concept and level design to release on the web and a native Android build. Development was AI-assisted under my direction. Quality was built in from the start, the same way I work as a Test Lead: a test strategy for every system, automated checks that prove the game works, and clear evidence of what they caught (see [Quality & testing](#quality--testing)).
+For Pixel Swarm I wrote the [game concept document](docs/game-concept.pdf) (competitor research, screen sketches, puzzle mechanics and monetization), directed the art and owned the product end to end, from concept and level design to release on the web and a native Android build. Development was AI-assisted under my direction. Quality was built in from the start, the same way I work as a Test Lead: a test strategy for every system, automated checks that prove the game works, and clear evidence of what they caught (see [Quality & testing](#quality--testing)).
 
 ## Features
 
@@ -94,7 +94,7 @@ npm run android:open   # open in Android Studio
 index.html, css/, js/, assets/   the game
 scripts/                         build, dev server, itch packaging
 tools/                           sprite cutting and slicing tools (PowerShell)
-docs/                            competitor level study, screenshots
+docs/                            game concept document, competitor level study, screenshots
 android/                         Capacitor Android project
 ```
 
