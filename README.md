@@ -45,14 +45,25 @@ The levels are generated procedurally, so "it looks fine" isn't enough: every le
 | Performance debug (`#perf`, `#perfbench`, `#perfstress`) | A live overlay (FPS, 1% low, frame-time graph, game-loop and render cost, memory, long tasks, scene and DOM counts) and a stress test (300 or 1000 extra bugs). The **benchmark lets the game play itself for 10 minutes**, level after level across every theme and difficulty, then reports frame-time percentiles, hitches, a **per-minute timeline** and a **memory-leak check** (heap, DOM and scene growth per minute), ready to copy into a bug ticket. The player's save is frozen during the run and restored after. `#perfbench_60` runs a shorter version headless. |
 | `PSAudio.measure()` | Renders the music and effects offline and measures their loudness, to balance the mix without relying on speakers. |
 
-The GitHub Pages demo keeps the **debug menu on** (DBG button: cheats, logs, performance tools, notch simulation) so the test tooling can be explored; the official itch.io release turns it off. The URL shortcuts above work in both.
+### Debug & QA tools in the game
+
+![Debug menu Tools and Logs tabs, the in-game bug report and the performance overlay](docs/screenshots/debug-tools.png)
+
+The **DBG** button opens a debug menu built for testers, not just for development:
+
+- **Tools tab:** cheats to reach any state fast (win/lose/auto-solve a level, currencies, unlocks, progress), every pop-up on demand, a fresh level for each of the 10 puzzle mechanics, a notch simulator for safe-area checks, the performance tools, and save codes to copy a player's progress or load a tester's.
+- **Logs tab:** errors, warnings, info and player actions with filters, a red error count on the DBG button, and copy / share / download, so a crash log can be attached to a ticket even after a restart.
+- **Bug report (Settings › Report or F8):** severity in QA terms, steps to reproduce pre-filled from the last actions, an annotated screenshot, game state, device, performance and logs in one report.
+- **Performance overlay and benchmark:** live frame-time, memory and render numbers; a stress test; and a 10-minute self-playing benchmark with a per-minute timeline and leak check.
+
+The GitHub Pages demo keeps the **debug menu on** so this tooling can be explored; the official itch.io release turns it off. The URL shortcuts above work in both.
 
 ## Tech
 
 | | |
 |---|---|
 | Rendering | Hybrid: **PixiJS 8** (WebGL) draws the gameplay (picture board, flying bugs, effects); menus, store and pop-ups are HTML/CSS. Falls back to a 2D canvas without WebGL |
-| Code | Vanilla JavaScript, no framework or bundler (~5.5k lines) |
+| Code | Vanilla JavaScript, no framework or bundler (~5k lines) |
 | Audio | Web Audio API: two music loops and ~18 synthesized sound effects |
 | Native | Capacitor → Android, with haptics and local notifications |
 | Build & deploy | Node build scripts → `dist/`; GitHub Actions publishes to GitHub Pages on every push to `main` |
@@ -71,6 +82,7 @@ Useful shortcuts (add to the URL): `#game`, `#game_hard`, `#events`, `#skins`, `
 
 ```bash
 npm run build          # release build → dist/
+npm run build:debug    # same, with the debug menu on (used for GitHub Pages)
 npm run package:itch   # zip for itch.io (HTML5)
 npm run android:sync   # build + copy into the Android project
 npm run android:open   # open in Android Studio

@@ -1350,6 +1350,7 @@ img { display: block; pointer-events: none; -webkit-user-drag: none; }
 .dbg-tabs button { position: relative; padding: 7px 0; border: 0; border-radius: 10px; background: transparent; color: #7a4317; font: 400 17px "Lilita One"; }
 .dbg-tabs button[aria-selected="true"] { background: #fff; color: #4d2a0e; box-shadow: 0 2px 0 #d9a868; }
 .dbg-tabs b { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: #e0453a; color: #fff; font: 700 11px/18px "Fredoka"; }
+.dbg-tabs b[hidden] { display: none; }
 .dbg-pane[hidden] { display: none; }
 .rp-chip b { margin-left: 3px; font-weight: 700; opacity: .75; }
 .lg-summary { margin: 8px 0 6px; font: 500 12px "Fredoka"; color: #7a5a3a; }
