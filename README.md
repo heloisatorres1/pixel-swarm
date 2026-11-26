@@ -45,6 +45,16 @@ The levels are generated procedurally, so "it looks fine" isn't enough: every le
 | Performance debug (`#perf`, `#perfbench`, `#perfstress`) | A live overlay (FPS, 1% low, frame-time graph, game-loop and render cost, memory, long tasks, scene and DOM counts) and a stress test (300 or 1000 extra bugs). The **benchmark lets the game play itself for 10 minutes**, level after level across every theme and difficulty, then reports frame-time percentiles, hitches, a **per-minute timeline** and a **memory-leak check** (heap, DOM and scene growth per minute), ready to copy into a bug ticket. The player's save is frozen during the run and restored after. `#perfbench_60` runs a shorter version headless. |
 | `PSAudio.measure()` | Renders the music and effects offline and measures their loudness, to balance the mix without relying on speakers. |
 
+### End-to-end test (Playwright + TypeScript)
+
+`tests/e2e/complete-medium-level.spec.ts` plays the game **only through real clicks on the page**: it opens the game as a returning player (Easy levels already finished, loaded as test data), starts **Flowers - Medium level 1**, plays it to the end (handling Medium mechanics such as linked and mystery blocks), then checks the "Level Complete" pop-up, the coin reward and that the win is saved (Medium stars, next level unlocked). Breaking the coin reward in the game makes it fail, so it catches real regressions. It uses a page object (`tests/e2e/pages/GamePage.ts`) and runs in a visible, phone-sized browser; every run saves a video.
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e                  # visible browser; HEADLESS=1 npm run test:e2e for a hidden one
+npm run test:e2e:report           # HTML report with steps, screenshots and video
+```
+
 ### Debug & QA tools in the game
 
 ![Debug menu Tools and Logs tabs, the in-game bug report and the performance overlay](docs/screenshots/debug-tools.png)
@@ -93,6 +103,7 @@ npm run android:open   # open in Android Studio
 ```
 index.html, css/, js/, assets/   the game
 scripts/                         build, dev server, itch packaging
+tests/e2e/                       Playwright end-to-end tests (TypeScript)
 tools/                           sprite cutting and slicing tools (PowerShell)
 docs/                            game concept document, competitor level study, screenshots
 android/                         Capacitor Android project
